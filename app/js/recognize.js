@@ -119,5 +119,25 @@ const PlanRecognizer = (function () {
       return { width_m: isFinite(wm) && wm >= 3 && wm <= 80 ? wm : null, rooms };
     });
   }
-  return { detect, detectPixels, guessTypes, label, TYPES };
+  /* Printed drawing scale found in a sheet's text, such as 3/16" = 1'-0" or 1:100.
+     Returns {ratio, raw} where one unit on paper is `ratio` units in the building, or null. Ported from the CRM takeoff editor. */
+  function inches(s) {
+    s = s.trim(); let m = s.match(/^(\d+)[-\s](\d+)\/(\d+)$/);
+    if (m) return parseInt(m[1], 10) + parseInt(m[2], 10) / parseInt(m[3], 10);
+    m = s.match(/^(\d+)\/(\d+)$/); if (m) return parseInt(m[1], 10) / parseInt(m[2], 10);
+    return /^\d+(?:\.\d+)?$/.test(s) ? parseFloat(s) : null;
+  }
+  function scaleFromText(raw) {
+    if (!raw) return null;
+    const text = raw.replace(/[′’ʹ]/g, "'").replace(/[″“”ʺ]/g, '"').replace(/\s+/g, ' ');
+    const imp = text.match(/(\d+(?:[-\s]\d+)?\/\d+|\d+(?:\.\d+)?)\s*"\s*=\s*(\d+)\s*'/);
+    if (imp) { const paper = inches(imp[1]), feet = parseInt(imp[2], 10); if (paper && paper > 0 && feet > 0) return { ratio: feet * 12 / paper, raw: imp[1].replace(/\s+/g, '') + '" = ' + feet + "'" }; }
+    const guarded = text.match(/scale[^0-9]{0,12}1\s*:\s*(\d{1,5})/i);
+    if (guarded) { const n = parseInt(guarded[1], 10); if (n > 1) return { ratio: n, raw: '1:' + n }; }
+    /* A bare 1:N is trusted only for common drawing scales, so a clock time is not mistaken for one. */
+    const bare = text.match(/(?:^|[^\d:])1\s*:\s*(\d{1,5})(?![\d])/);
+    if (bare) { const n = parseInt(bare[1], 10); if ([100, 125, 150, 200, 250, 300, 400, 500, 750, 1000, 1250, 2000, 2500, 5000].indexOf(n) >= 0) return { ratio: n, raw: '1:' + n }; }
+    return null;
+  }
+  return { detect, detectPixels, guessTypes, label, scaleFromText, TYPES };
 })();

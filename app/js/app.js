@@ -224,9 +224,9 @@
     $('#inTraceW').value = trace.width; $('#outTraceW').textContent = fmtLen(trace.width);
     $('#inTraceO').value = trace.opacity; $('#outTraceO').textContent = Math.round(trace.opacity * 100) + '%';
   }
-  function useImage(src, file) {
+  function useImage(src, file, width, note) {
     const img = new Image();
-    img.onload = () => { trace = { src, aspect: img.width / img.height || 1, width: 12, opacity: 0.5, img, file }; say('Plan loaded. Press Detect rooms, then check the scale.'); PlanEditor.refit(); traceUi(); PlanEditor.render(); };
+    img.onload = () => { trace = { src, aspect: img.width / img.height || 1, width: width || 12, opacity: 0.5, img, file }; say(note || 'Plan loaded. Press Detect rooms, then check the scale.'); PlanEditor.refit(); traceUi(); PlanEditor.render(); };
     img.onerror = () => say('This file could not be opened as a picture.');
     img.src = src;
   }
@@ -250,8 +250,14 @@
       const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
       await page.render({ canvasContext: g, viewport: vp }).promise;
       const blob = await new Promise(r => c.toBlob(r, 'image/png'));
-      useImage(c.toDataURL('image/png'), blob);
-      if (doc.numPages > 1) setTimeout(() => say('Plan loaded from page 1 of ' + doc.numPages + '. Press Detect rooms, then check the scale.'), 50);
+      /* A scale printed on the sheet gives the real size of the page: page width on paper times the ratio. */
+      let width = null, note = 'Plan loaded' + (doc.numPages > 1 ? ' from page 1 of ' + doc.numPages : '') + '. Press Detect rooms, then check the scale.';
+      try {
+        const tc = await page.getTextContent(), sc = PlanRecognizer.scaleFromText(tc.items.map(i => i.str).join(' '));
+        const wm = sc ? base.width / 72 * 0.0254 * sc.ratio : 0;
+        if (wm >= 3 && wm <= 200) { width = wm; note = 'Plan loaded. Scale ' + sc.raw + ' was read from the sheet, so sizes should already be right. Press Detect rooms.'; }
+      } catch (e) {}
+      useImage(c.toDataURL('image/png'), blob, width, note);
     } catch (e) { say('This PDF could not be opened. Save the plan page as a picture and load that.'); }
   }
   $('#inTrace').addEventListener('change', e => {
