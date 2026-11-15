@@ -4,10 +4,11 @@ const Scene3D = (function () {
   const H = 2.7, keys = {};
   const cam = { theta: 0.5, phi: 0.9, radius: 12, x: 0, z: 0, yaw: 0, pitch: -0.05, key: '' };
   let T = null, canvas, stage, plans = [], view = 'orbit', sel = null, onPick = function () {};
+  let walkTest = null, path = null, floors = [], lastT = 0, mini = null, hover = null, dest = null, hot = null, hotBox = null;
   let bb = { x0: 0, z0: 0, x1: 5, z1: 4 }, texes = [];
 
-  function init(c, s, pickCb) {
-    canvas = c; stage = s; onPick = pickCb;
+  function init(c, s, pickCb, miniSvg) {
+    canvas = c; stage = s; onPick = pickCb; mini = miniSvg || null;
     if (typeof THREE === 'undefined') return false;
     let renderer;
     try { renderer = new THREE.WebGLRenderer({ canvas, antialias: true }); } catch (e) { return false; }
@@ -22,6 +23,10 @@ const Scene3D = (function () {
     scene.add(sun); scene.add(sun.target);
     const roomG = new THREE.Group(), furnG = new THREE.Group(); scene.add(roomG); scene.add(furnG);
     T = { renderer, scene, camera, sun, roomG, furnG, box: null, dirty: true };
+    /* Floor rings: one follows the pointer in walk view, one marks where you are walking to. */
+    const ring = (op) => { const m = new THREE.Mesh(new THREE.RingGeometry(0.16, 0.24, 32), new THREE.MeshBasicMaterial({ color: 0xffb52e, transparent: true, opacity: op, depthWrite: false })); m.rotation.x = -Math.PI / 2; m.visible = false; m.renderOrder = 5; scene.add(m); return m; };
+    hover = ring(0.55); dest = ring(0.95);
+    if (mini) mini.addEventListener('click', miniClick);
     bindInput();
     if (window.ResizeObserver) new ResizeObserver(resize).observe(stage); else window.addEventListener('resize', resize);
     new MutationObserver(applyTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
@@ -111,7 +116,7 @@ const Scene3D = (function () {
   function build(p, style) {
     plans = p;
     if (!T) return;
-    clearGroup(T.roomG); clearGroup(T.furnG); walls = [];
+    clearGroup(T.roomG); clearGroup(T.furnG); walls = []; floors = []; path = null; if (dest) dest.visible = false; hot = null; if (hotBox) { T.scene.remove(hotBox); hotBox = null; }
     texes.forEach(t => t.dispose()); texes = [];
     if (!plans.length) { T.dirty = true; return; }
     const S = STYLES[style];
@@ -127,7 +132,7 @@ const Scene3D = (function () {
         tex.repeat.set(tile ? 1 / 1.6 : 1 / 2.2, tile ? 1 / 1.6 : 1 / 2.2); texes.push(tex);
         fmat = new THREE.MeshStandardMaterial({ map: tex, roughness: tile ? 0.45 : 0.75 });
       } else fmat = M(0x9a9a98, 0.95);
-      const fl = outlineMesh(o, fmat, false); fl.receiveShadow = true; g.add(fl);
+      const fl = outlineMesh(o, fmat, false); fl.receiveShadow = true; fl.userData.floor = true; g.add(fl); floors.push(fl);
       g.add(outlineMesh(o, M(0xf7f6f3, 1), true));
       wallSegments(r).forEach(seg => g.add(buildWall(r, o, seg, wm, white, S)));
       T.roomG.add(g);
@@ -143,8 +148,23 @@ const Scene3D = (function () {
     T.sun.position.set(cx + 6, 11, cz + 5); T.sun.target.position.set(cx, 0, cz);
     const sc = T.sun.shadow.camera; sc.left = -ext; sc.right = ext; sc.top = ext; sc.bottom = -ext; sc.near = 0.5; sc.far = 40; sc.updateProjectionMatrix();
     const key = [bb.x0, bb.z0, bb.x1, bb.z1].join(',');
-    if (cam.key !== key) { cam.key = key; cam.radius = Math.max(bb.x1 - bb.x0, bb.z1 - bb.z0) * 1.4 + 4; if (!inside(cam.x, cam.z)) { cam.x = cx; cam.z = cz; } }
+    walkTest = walkArea(plans);
+    if (cam.key !== key) { cam.key = key; cam.radius = Math.max(bb.x1 - bb.x0, bb.z1 - bb.z0) * 1.4 + 4; }
+    if (!inside(cam.x, cam.z)) enterWalk(plans.find(p => p.room.id === cam.roomId) || plans[0]);
+    drawMini();
     highlight(); T.dirty = true;
+  }
+  /* A light outline on the piece under the pointer, so it is clear what a double-click will pick. */
+  function setHot(h) {
+    if (!T || (h && hot && h.roomId === hot.roomId && h.cat === hot.cat) || (!h && !hot)) return;
+    hot = h; if (hotBox) { T.scene.remove(hotBox); hotBox = null; }
+    if (h && !(sel && sel.roomId === h.roomId && sel.cat === h.cat)) {
+      hotBox = new THREE.Group();
+      T.furnG.children.filter(c => c.userData.roomId === h.roomId && c.userData.cat === h.cat).forEach(c => hotBox.add(new THREE.BoxHelper(c, 0xffb52e)));
+      T.scene.add(hotBox);
+    }
+    canvas.style.cursor = h ? 'pointer' : '';
+    T.dirty = true;
   }
   function highlight() {
     if (!T) return;
@@ -156,19 +176,77 @@ const Scene3D = (function () {
     }
     T.dirty = true;
   }
-  /* Walking stays inside rooms; a point near a shared edge of two rectangles (a doorway between rooms, or the two halves of an L) is allowed. */
-  function inside(x, z) {
-    const rects = []; plans.forEach(pl => rects.push.apply(rects, roomRects(pl.room)));
-    const inR = (q, m) => x >= q.x0 + m && x <= q.x1 - m && z >= q.z0 + m && z <= q.z1 - m;
-    return rects.some(q => inR(q, 0.15)) || rects.filter(q => inR(q, -0.16)).length > 1;
-  }
+  /* Walls block; doors let you through (see walkArea). */
+  function inside(x, z) { return walkTest ? walkTest(x, z) : true; }
+  /* Stand just inside the room's door, looking into the room; fall back to the middle of its largest part. */
   function enterWalk(pl) {
     if (!pl) return;
-    const r = pl.r, o = pl.room, n = WALLS[r.door.wall].n, pt = wallPoint(r, r.door.wall, r.door.t);
-    cam.x = o.x + clamp(pt[0] + n[0] * 0.7, 0.3, r.W - 0.3); cam.z = o.y + clamp(pt[1] + n[1] * 0.7, 0.3, r.D - 0.3);
-    cam.yaw = Math.atan2(-(o.x + r.W / 2 - cam.x), -(o.y + r.D / 2 - cam.z)); cam.pitch = -0.08;
+    const r = pl.r, o = pl.room, n = WALLS[r.door.wall].n, pt = wallPoint(r, r.door.wall, r.door.t), q = maxRects(r)[0];
+    const mx = o.x + (q.x0 + q.x1) / 2, mz = o.y + (q.z0 + q.z1) / 2;
+    cam.x = o.x + pt[0] + n[0] * 0.8; cam.z = o.y + pt[1] + n[1] * 0.8;
+    if (!inside(cam.x, cam.z)) { cam.x = mx; cam.z = mz; }
+    cam.yaw = Math.hypot(mx - cam.x, mz - cam.z) > 0.3 ? Math.atan2(-(mx - cam.x), -(mz - cam.z)) : Math.atan2(n[0], n[1]);
+    cam.pitch = -0.06; cam.roomId = o.id; path = null; if (dest) dest.visible = false;
+    if (canvas) canvas.dispatchEvent(new CustomEvent('roomchange', { detail: o.id }));
+    if (T) T.dirty = true; drawMini();
   }
-  function setView(v, pl) { view = v; if (v === 'walk') enterWalk(pl); if (T) T.dirty = true; }
+  /* Entering the walk view puts you back where you last stood, if that spot still exists; otherwise at the room's door. */
+  function setView(v, pl, pose) {
+    view = v;
+    if (v === 'walk') {
+      if (pose && isFinite(pose.x) && isFinite(pose.z) && inside(pose.x, pose.z)) {
+        cam.x = pose.x; cam.z = pose.z; cam.yaw = pose.yaw || 0; cam.pitch = clamp(pose.pitch || 0, -1.1, 1.1); path = null; if (dest) dest.visible = false; onMoved();
+      } else enterWalk(pl);
+    }
+    if (T) T.dirty = true; if (hover) hover.visible = false; setHot(null); drawMini();
+  }
+  function pose() { return { x: cam.x, z: cam.z, yaw: cam.yaw, pitch: cam.pitch, roomId: cam.roomId }; }
+  /* Walk to a point on the floor along the shortest way through doors. */
+  function walkTo(p) {
+    if (!walkTest) return false;
+    const pp = findPath(walkTest, [cam.x, cam.z], p);
+    if (!pp || !pp.length) {
+      /* No way on foot (the room's door may open outside): step straight into the room that was clicked. */
+      const pl = plans.find(q => roomRects(q.room).some(r => p[0] >= r.x0 && p[0] <= r.x1 && p[1] >= r.z0 && p[1] <= r.z1));
+      if (!pl) return false;
+      enterWalk(pl); if (inside(p[0], p[1])) { cam.x = p[0]; cam.z = p[1]; }
+      onMoved(); return true;
+    }
+    path = pp; const e = pp[pp.length - 1]; dest.position.set(e[0], 0.012, e[1]); dest.visible = true; T.dirty = true;
+    return true;
+  }
+  function goRoom(id) { const pl = plans.find(p => p.room.id === id); if (pl) enterWalk(pl); }
+  /* ---------- mini-map ---------- */
+  const SNS = 'http://www.w3.org/2000/svg';
+  function sv(name, attrs, parent) { const e = document.createElementNS(SNS, name); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+  let miniMe = null;
+  function drawMini() {
+    if (!mini || !plans.length) return;
+    mini.textContent = '';
+    const pad = 0.6;
+    mini.setAttribute('viewBox', [bb.x0 - pad, bb.z0 - pad, bb.x1 - bb.x0 + 2 * pad, bb.z1 - bb.z0 + 2 * pad].join(' '));
+    plans.forEach(pl => {
+      const o = pl.room;
+      sv('path', { d: 'M ' + roomPolygon(o).map(p => (o.x + p[0]) + ' ' + (o.y + p[1])).join(' L ') + ' Z', class: 'mroom' + (o.id === cam.roomId ? ' on' : '') }, mini);
+      const r = pl.r, w = r.door.width, a = wallPoint(r, r.door.wall, r.door.t - w / 2), b = wallPoint(r, r.door.wall, r.door.t + w / 2);
+      sv('line', { x1: o.x + a[0], y1: o.y + a[1], x2: o.x + b[0], y2: o.y + b[1], class: 'mdoor' }, mini);
+    });
+    miniMe = sv('g', { class: 'mme' }, mini);
+    sv('path', { d: 'M 0 0 L -0.9 -1.6 A 1.85 1.85 0 0 1 0.9 -1.6 Z', class: 'mcone' }, miniMe);
+    sv('circle', { cx: 0, cy: 0, r: 0.28, class: 'mdot' }, miniMe);
+    moveMini();
+  }
+  function moveMini() {
+    if (!miniMe) return;
+    /* yaw 0 looks toward -z (up on the map); the cone is drawn pointing up. */
+    miniMe.setAttribute('transform', 'translate(' + cam.x + ' ' + cam.z + ') rotate(' + (-cam.yaw * 180 / Math.PI) + ')');
+  }
+  function miniClick(e) {
+    if (view !== 'walk') return;
+    const pt = mini.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+    const m = mini.getScreenCTM(); if (!m) return;
+    const w = pt.matrixTransform(m.inverse()); walkTo([w.x, w.y]);
+  }
   function setSelected(s) { sel = s; highlight(); }
   function placeCamera() {
     const c = T.camera, cx = (bb.x0 + bb.x1) / 2, cz = (bb.z0 + bb.z1) / 2;
@@ -179,16 +257,34 @@ const Scene3D = (function () {
   function tick() {
     requestAnimationFrame(tick);
     if (!T || !plans.length) return;
+    const now = performance.now(), dt = Math.min(0.05, lastT ? (now - lastT) / 1000 : 0); lastT = now;
     if (view === 'walk') {
-      const f = (keys.KeyW || keys.ArrowUp || keys.padF ? 1 : 0) - (keys.KeyS || keys.ArrowDown || keys.padB ? 1 : 0), s = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0), tr = (keys.ArrowLeft ? 1 : 0) - (keys.ArrowRight ? 1 : 0);
+      const f = (keys.KeyW || keys.ArrowUp || keys.padF ? 1 : 0) - (keys.KeyS || keys.ArrowDown || keys.padB ? 1 : 0), s = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
+      const tr = (keys.ArrowLeft || keys.KeyQ || keys.padL ? 1 : 0) - (keys.ArrowRight || keys.KeyE || keys.padR ? 1 : 0);
       if (f || s || tr) {
-        const v = 0.045; cam.yaw += tr * 0.03;
+        path = null; dest.visible = false;
+        const v = (keys.ShiftLeft || keys.ShiftRight ? 2.6 : 1.5) * dt; cam.yaw += tr * 1.9 * dt;
         const nx = cam.x + (-Math.sin(cam.yaw) * f + Math.cos(cam.yaw) * s) * v, nz = cam.z + (-Math.cos(cam.yaw) * f - Math.sin(cam.yaw) * s) * v;
         if (inside(nx, nz)) { cam.x = nx; cam.z = nz; } else if (inside(nx, cam.z)) cam.x = nx; else if (inside(cam.x, nz)) cam.z = nz;
-        T.dirty = true;
+        T.dirty = true; onMoved();
+      } else if (path) {
+        /* Follow the planned route: turn toward the next point while walking, slow down on sharp turns. */
+        const tg = path[0], dx = tg[0] - cam.x, dz = tg[1] - cam.z, d = Math.hypot(dx, dz);
+        let dy = Math.atan2(-dx, -dz) - cam.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+        if (d > 0.05) cam.yaw += dy * Math.min(1, dt * 7);
+        const stp = 1.6 * dt * (Math.abs(dy) > 1.1 ? 0.25 : 1);
+        if (d <= stp) { cam.x = tg[0]; cam.z = tg[1]; path.shift(); if (!path.length) { path = null; dest.visible = false; } }
+        else { cam.x += dx / d * stp; cam.z += dz / d * stp; }
+        cam.pitch += (-0.06 - cam.pitch) * Math.min(1, dt * 4);
+        T.dirty = true; onMoved();
       }
     }
     if (canvas.clientWidth && (T.dirty || T.growing)) { T.dirty = false; placeCamera(); T.growing = animateWalls(); T.renderer.render(T.scene, T.camera); }
+  }
+  /* Which room you are in, for the mini-map and for re-entering after an edit. */
+  function onMoved() {
+    const pl = plans.find(p => roomRects(p.room).some(q => cam.x >= q.x0 && cam.x <= q.x1 && cam.z >= q.z0 && cam.z <= q.z1));
+    if (pl && pl.room.id !== cam.roomId) { cam.roomId = pl.room.id; drawMini(); canvas.dispatchEvent(new CustomEvent('roomchange', { detail: pl.room.id })); } else moveMini();
   }
   function resize() {
     if (!T) return; const w = stage.clientWidth, h = stage.clientHeight; if (!w || !h) return;
@@ -205,30 +301,67 @@ const Scene3D = (function () {
       const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY; moved += Math.abs(dx) + Math.abs(dy);
       if (ptr.size === 2) { const a = [...ptr.values()], d = Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y); if (pinch && view === 'orbit') cam.radius = clamp(cam.radius * pinch / d, 2.5, 60); pinch = d; }
       else if (view === 'orbit') { cam.theta -= dx * 0.008; cam.phi = clamp(cam.phi - dy * 0.006, 0.05, 1.5); }
-      else { cam.yaw += dx * 0.005; cam.pitch = clamp(cam.pitch + dy * 0.004, -1.1, 1.1); }
+      else { cam.yaw += dx * 0.005; cam.pitch = clamp(cam.pitch + dy * 0.004, -1.1, 1.1); moveMini(); }
       T.dirty = true;
+    });
+    /* In walk view a ring on the floor shows where a click would take you. */
+    canvas.addEventListener('pointermove', e => {
+      if (ptr.size || !floors.length || e.pointerType === 'touch') { if (hover.visible) { hover.visible = false; T.dirty = true; } return; }
+      const h = firstHit(e), furn = h && h.cat && h.cat !== 'rug';
+      setHot(furn ? { roomId: h.roomId, cat: h.cat } : null);
+      const ok = view === 'walk' && h && !furn && inside(h.x, h.z);
+      if (hover.visible !== !!ok || ok) { hover.visible = !!ok; if (ok) hover.position.set(h.x, 0.011, h.z); T.dirty = true; }
+    });
+    canvas.addEventListener('pointerleave', () => { setHot(null); if (hover.visible) { hover.visible = false; T.dirty = true; } });
+    /* Double-click picks a piece of furniture; single clicks walk, so nothing is chosen by accident. */
+    canvas.addEventListener('dblclick', e => {
+      const h = firstHit(e);
+      if (h && h.cat) { path = null; if (dest) dest.visible = false; setHot(null); onPick({ roomId: h.roomId, cat: h.cat }); }
     });
     const end = e => {
       const had = ptr.has(e.pointerId); ptr.delete(e.pointerId); if (ptr.size < 2) pinch = 0;
       if (had && e.type === 'pointerup' && moved < 6) pick(e);
     };
     canvas.addEventListener('pointerup', end); canvas.addEventListener('pointercancel', end);
-    canvas.addEventListener('wheel', e => { if (view !== 'orbit') return; e.preventDefault(); cam.radius = clamp(cam.radius * (1 + e.deltaY * 0.001), 2.5, 60); T.dirty = true; }, { passive: false });
+    canvas.addEventListener('wheel', e => {
+      e.preventDefault();
+      if (view === 'orbit') { cam.radius = clamp(cam.radius * (1 + e.deltaY * 0.001), 2.5, 60); T.dirty = true; return; }
+      /* In the walk view the wheel steps forward and back, at most half a metre per notch. */
+      path = null; if (dest) dest.visible = false;
+      const st = clamp(-e.deltaY * (e.deltaMode === 1 ? 0.12 : 0.004), -0.5, 0.5);
+      for (let k = 0, n = Math.ceil(Math.abs(st) / 0.05); k < n; k++) {
+        const v = st / n, nx = cam.x - Math.sin(cam.yaw) * v, nz = cam.z - Math.cos(cam.yaw) * v;
+        if (inside(nx, nz)) { cam.x = nx; cam.z = nz; } else if (inside(nx, cam.z)) cam.x = nx; else if (inside(cam.x, nz)) cam.z = nz; else break;
+      }
+      T.dirty = true; onMoved();
+    }, { passive: false });
     window.addEventListener('keydown', e => {
       if (view !== 'walk' || canvas.hidden) return; const t = e.target.tagName; if (t === 'INPUT' || t === 'SELECT' || t === 'TEXTAREA') return;
-      if (/^(Key[WASD]|Arrow(Up|Down|Left|Right))$/.test(e.code)) { keys[e.code] = true; e.preventDefault(); }
+      if (/^(Key[WASDQE]|Arrow(Up|Down|Left|Right)|Shift(Left|Right))$/.test(e.code)) { keys[e.code] = true; if (!/^Shift/.test(e.code)) e.preventDefault(); }
     });
     window.addEventListener('keyup', e => { keys[e.code] = false; });
     window.addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
   }
-  function pick(e) {
+  function rayFrom(e) {
     const rc = canvas.getBoundingClientRect(), v = new THREE.Vector2((e.clientX - rc.left) / rc.width * 2 - 1, -((e.clientY - rc.top) / rc.height * 2 - 1));
-    const ray = new THREE.Raycaster(); ray.setFromCamera(v, T.camera);
-    let hit = null;
-    for (const h of ray.intersectObjects(T.furnG.children, true)) { let o = h.object; while (o && !o.userData.cat) o = o.parent; if (o) { hit = o.userData; if (hit.cat !== 'rug') break; } }
-    onPick(hit ? { roomId: hit.roomId, cat: hit.cat } : null);
+    const ray = new THREE.Raycaster(); ray.setFromCamera(v, T.camera); return ray;
+  }
+  /* The nearest thing under the pointer: a piece of furniture {roomId, cat, x, z} or the floor {x, z}. */
+  function firstHit(e) {
+    for (const h of rayFrom(e).intersectObjects(T.furnG.children.concat(floors), true)) {
+      let o = h.object; while (o && !o.userData.cat && !o.userData.floor) o = o.parent;
+      if (!o) continue;
+      return { roomId: o.userData.roomId, cat: o.userData.cat || null, x: h.point.x, z: h.point.z };
+    }
+    return null;
+  }
+  /* A single click walks to the floor spot (or rug) in the walk view; in the overview a click on empty space clears the selection. */
+  function pick(e) {
+    const h = firstHit(e);
+    if (view === 'walk') { if (h && (!h.cat || h.cat === 'rug')) walkTo([h.x, h.z]); return; }
+    if (!h || !h.cat) onPick(null);
   }
   function hold(key, on) { keys[key] = on; }
   function regrow() { wallMemo = {}; walls.forEach(wl => { wl.cur = 0.02; wl.g.scale.y = 0.02; }); if (T) T.growing = true; }
-  return { init, build, setView, setSelected, resize, hold, regrow, refresh: function () { if (T) T.dirty = true; } };
+  return { init, build, setView, setSelected, resize, hold, regrow, goRoom, walkTo, pose, refresh: function () { if (T) T.dirty = true; } };
 })();

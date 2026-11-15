@@ -75,16 +75,34 @@ input[type=file]{max-width:100%; font-size:13px}
 .rooms small{font-weight:500; color:var(--muted)}
 
 .stage{position:relative; background:var(--stage); border:1px solid var(--line); border-radius:12px; overflow:hidden; min-height:0}
-.stage canvas,.stage svg{position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none}
+.stage canvas,.stage #plan{position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none}
 .stage canvas{cursor:grab}
 .views{position:absolute; top:10px; left:10px; width:min(280px, calc(100% - 20px))}
 .views .seg{background:var(--panel); border:1px solid var(--line)}
 .views .seg button[aria-pressed="true"]{background:var(--sun); color:var(--sun-ink); box-shadow:none}
 .cap{position:absolute; left:10px; right:10px; bottom:10px; display:flex; justify-content:space-between; align-items:flex-end; gap:10px; pointer-events:none; flex-wrap:wrap}
-.cap span{background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:4px 9px; font-size:12px; color:var(--muted)}
+.cap span{white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:4px 9px; font-size:12px; color:var(--muted)}
 .cap .dims{color:var(--ink); font-weight:600}
-.walkpad{position:absolute; right:10px; top:10px; display:flex; flex-direction:column; gap:6px}
-.walkpad button{width:44px; height:44px; border-radius:10px; border:1px solid var(--line); background:var(--panel); font-size:16px; touch-action:none; user-select:none}
+.walkpad{position:absolute; right:10px; bottom:50px; display:grid; grid-template-columns:repeat(3,48px); grid-template-rows:repeat(2,48px); gap:6px}
+.walkpad button{border-radius:12px; border:1px solid var(--line); background:var(--panel); font-size:18px; touch-action:none; user-select:none; -webkit-user-select:none; display:grid; place-items:center; box-shadow:0 2px 6px rgba(0,0,0,.12)}
+.walkpad button:active,.walkpad button.on{background:var(--sun); color:var(--sun-ink); border-color:var(--sun)}
+#padF{grid-column:2; grid-row:1} #padL{grid-column:1; grid-row:2} #padB{grid-column:2; grid-row:2} #padR{grid-column:3; grid-row:2}
+.mini{position:absolute; left:10px; bottom:50px; width:min(210px, 40%); aspect-ratio:4/3; background:var(--panel); border:1px solid var(--line); border-radius:12px; box-shadow:0 2px 8px rgba(0,0,0,.14); cursor:crosshair}
+.mroom{fill:var(--bg); stroke:var(--ink); stroke-width:.09}
+.mroom.on{fill:var(--accent-soft)}
+.mdoor{stroke:var(--sun); stroke-width:.22}
+.mdot{fill:var(--accent); stroke:var(--panel); stroke-width:.08}
+.mcone{fill:var(--accent); opacity:.28}
+.itemcard{position:absolute; right:10px; top:58px; width:min(330px, calc(100% - 20px)); max-height:calc(100% - 120px); overflow:auto; background:var(--panel); border:1px solid var(--line); border-radius:14px; box-shadow:0 12px 32px rgba(0,0,0,.22); padding:12px; display:flex; flex-direction:column; gap:10px; z-index:2}
+.itemcard .item-body{border-top:0; padding:0}
+.itemcard .alts{max-height:none}
+.ic-top{position:sticky; top:-12px; margin:-12px -12px 0; padding:12px; background:var(--panel); display:flex; justify-content:space-between; align-items:center; gap:10px; border-bottom:1px solid var(--line)}
+.ic-top .btn{padding:7px 12px}
+.ic-top .pr{font-size:16px}
+.ic-title{min-width:0}
+.walkrooms{position:absolute; top:58px; left:10px; right:10px; display:flex; flex-wrap:wrap; gap:6px; pointer-events:none}
+.walkrooms button{pointer-events:auto; border:1px solid var(--line); background:var(--panel); border-radius:999px; padding:5px 12px; font-size:12.5px; font-weight:600; box-shadow:0 1px 4px rgba(0,0,0,.1)}
+.walkrooms button[aria-pressed="true"]{background:var(--ink); color:var(--panel); border-color:var(--ink)}
 .fail{pointer-events:none; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:24px; text-align:center; color:var(--muted)}
 
 /* plan editor */
@@ -230,9 +248,18 @@ input[type=file]{max-width:100%; font-size:13px}
         <button type="button" data-v="walk">Walk</button>
       </div>
     </div>
+    <div class="walkrooms" id="walkRooms" hidden></div>
+    <section class="itemcard" id="itemCard" aria-label="Selected item" hidden>
+      <div class="ic-top"><button type="button" class="btn primary" id="icClose">Back to walking</button><span class="pr num" id="icPrice"></span></div>
+      <div class="ic-title"><div class="nm" id="icName"></div><div class="meta num" id="icMeta"></div></div>
+      <div id="icBody"></div>
+    </section>
+    <svg class="mini" id="mini" role="img" aria-label="Map of the home. Click a spot to walk there." hidden></svg>
     <div class="walkpad" id="walkpad" hidden>
-      <button type="button" id="padF" aria-label="Forward">▲</button>
-      <button type="button" id="padB" aria-label="Back">▼</button>
+      <button type="button" id="padF" aria-label="Walk forward">▲</button>
+      <button type="button" id="padL" aria-label="Turn left">↺</button>
+      <button type="button" id="padB" aria-label="Walk back">▼</button>
+      <button type="button" id="padR" aria-label="Turn right">↻</button>
     </div>
     <div class="cap"><span id="hint"></span><span class="dims num" id="homeDims"></span></div>
   </section>
@@ -251,7 +278,7 @@ input[type=file]{max-width:100%; font-size:13px}
       <p class="toast" id="clash" hidden></p>
       <div id="groups" class="grp"></div>
       <button type="button" class="btn" id="btnCopy">Copy list</button>
-      <p class="note">Tap an item here or in the 3D view to swap it. The rest of the room rebalances to stay in budget.</p>
+      <p class="note">Click an item here, or double-click it in the 3D view, to swap it. The rest of the room rebalances to stay in budget.</p>
     </div>
   </aside>
 </main>

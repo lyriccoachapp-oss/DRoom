@@ -147,3 +147,33 @@ test('door types keep their own clear zones and change how close furniture may c
     assert.ok(big ? zoneArea(p.r.doorRect) > 0.9 : zoneArea(p.r.doorRect) < 0.7, `${doorType} ${swing}: clear zone size`);
   }
 });
+
+test('walking: walls block, doors let you through, and paths stay inside', () => {
+  /* Two rooms side by side sharing the wall at x = 4; the left room's door is on that wall. */
+  ctx.__plans = run(`[
+    {id:'a',name:'A',type:'living',x:0,y:0,W:4,D:4,doorWall:'E',doorPos:0.5,winWall:'N',winPos:0.5,overrides:{},removed:[]},
+    {id:'b',name:'B',type:'bedroom',x:4,y:0,W:4,D:4,doorWall:'N',doorPos:0.5,winWall:'S',winPos:0.5,overrides:{},removed:[]}
+  ].map(room => ({room, r: roomGeom(room)}))`);
+  const test = run('__walk = walkArea(__plans)');
+  assert.ok(run('__walk(2, 2)') && run('__walk(6, 2)'), 'room centres are walkable');
+  assert.ok(!run('__walk(4, 0.6)'), 'the shared wall away from the door blocks');
+  assert.ok(run('__walk(4, 2)'), 'the doorway is walkable');
+  assert.ok(!run('__walk(0.1, 2)'), 'too close to an outside wall');
+  const path = run('findPath(__walk, [1, 0.8], [7, 0.8])');
+  assert.ok(path && path.length >= 2, 'a path exists through the door');
+  const pts = [[1, 0.8]].concat(Array.from(path));
+  for (let i = 1; i < pts.length; i++) for (let k = 0; k <= 20; k++) {
+    const x = pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * k / 20, z = pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * k / 20;
+    assert.ok(run(`__walk(${x}, ${z})`), `path leaves the walkable area at ${x.toFixed(2)}, ${z.toFixed(2)}`);
+  }
+  const last = pts[pts.length - 1];
+  assert.ok(Math.hypot(last[0] - 7, last[1] - 0.8) < 1e-9, 'path ends at the target');
+  /* No door between two rooms: no way across. */
+  ctx.__plans[0].room.doorWall = 'W'; ctx.__plans[0].r = run('roomGeom(__plans[0].room)');
+  assert.strictEqual(run('findPath(walkArea(__plans), [1, 2], [7, 2])'), null);
+  /* L-shaped room: you can walk around the notch. */
+  ctx.__l = run(`[{id:'l',name:'L',type:'living',x:0,y:0,W:6,D:5,doorWall:'S',doorPos:0.3,winWall:'W',winPos:0.5,overrides:{},removed:[],cut:{corner:'NE',w:3,d:2.5}}].map(room => ({room, r: roomGeom(room)}))`);
+  const lp = run('findPath(walkArea(__l), [1, 1], [5, 4])');
+  assert.ok(lp && lp.length >= 2, 'path bends round the notch');
+  assert.ok(!run('walkArea(__l)(4.5, 1)'), 'the notch is not walkable');
+});

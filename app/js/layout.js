@@ -304,3 +304,61 @@ function canFit(plan,cat,si){
   const want=new Set(plan.lines.filter(l=>!l.area).map(l=>l.cat));
   return runLayout(plan.r,want,forced).some(p=>p.cat===cat);
 }
+
+/* ---------- Walking ---------- */
+/* Where a person can stand: room interiors kept 0.22 m off the walls, joined through door openings.
+   Returns test(x, z) in world coordinates; test.zones holds the rectangles. */
+function walkArea(plans){
+  const zones=[];
+  plans.forEach(pl=>{
+    const o=pl.room,r=pl.r;
+    maxRects(r).forEach(q=>zones.push({x0:o.x+q.x0+0.22,x1:o.x+q.x1-0.22,z0:o.y+q.z0+0.22,z1:o.y+q.z1-0.22}));
+    const d=at(r,r.door.wall,r.door.t,0,Math.max(0.5,r.door.width-0.12),1.1);
+    zones.push({x0:o.x+d.cx-d.hx,x1:o.x+d.cx+d.hx,z0:o.y+d.cz-d.hz,z1:o.y+d.cz+d.hz});
+  });
+  const test=(x,z)=>zones.some(q=>x>=q.x0&&x<=q.x1&&z>=q.z0&&z<=q.z1);
+  test.zones=zones;
+  return test;
+}
+/* Shortest walk from `from` to `to` ([x, z]) that stays where test() allows: A* on a grid, then straightened.
+   Returns the points to walk through (the start excluded), or null when there is no way. A target that is not
+   walkable snaps to the nearest point that is, within about a metre. */
+function findPath(test,from,to,step){
+  step=step||0.15;
+  const zs=test.zones;if(!zs.length)return null;
+  let x0=Infinity,z0=Infinity,x1=-Infinity,z1=-Infinity;
+  zs.forEach(q=>{x0=Math.min(x0,q.x0);z0=Math.min(z0,q.z0);x1=Math.max(x1,q.x1);z1=Math.max(z1,q.z1);});
+  const nx=Math.ceil((x1-x0)/step)+1,nz=Math.ceil((z1-z0)/step)+1,N=nx*nz,P=i=>[x0+(i%nx)*step,z0+Math.floor(i/nx)*step];
+  const ok=new Uint8Array(N);for(let i=0;i<N;i++){const p=P(i);ok[i]=test(p[0],p[1])?1:0;}
+  const near=p=>{
+    const ci=clamp(Math.round((p[0]-x0)/step),0,nx-1),cj=clamp(Math.round((p[1]-z0)/step),0,nz-1);
+    let best=-1,bd=Infinity,R=Math.ceil(1.0/step);
+    for(let j=Math.max(0,cj-R);j<=Math.min(nz-1,cj+R);j++)for(let i=Math.max(0,ci-R);i<=Math.min(nx-1,ci+R);i++){
+      if(!ok[j*nx+i])continue;const q=P(j*nx+i),d=(q[0]-p[0])**2+(q[1]-p[1])**2;if(d<bd){bd=d;best=j*nx+i;}}
+    return best;
+  };
+  const s=near(from),g=near(to);if(s<0||g<0)return null;
+  /* A* with a binary heap; 8 neighbours, no cutting past a blocked corner. */
+  const gs=new Float64Array(N).fill(Infinity),came=new Int32Array(N).fill(-1),done=new Uint8Array(N),heap=[],fs=[];
+  const gx=g%nx,gz=Math.floor(g/nx),hh=i=>{const dx=Math.abs(i%nx-gx),dz=Math.abs(Math.floor(i/nx)-gz);return Math.max(dx,dz)+0.4142*Math.min(dx,dz);};
+  const push=(i,f)=>{heap.push(i);fs.push(f);let k=heap.length-1;while(k){const pp=(k-1)>>1;if(fs[pp]<=fs[k])break;[heap[pp],heap[k]]=[heap[k],heap[pp]];[fs[pp],fs[k]]=[fs[k],fs[pp]];k=pp;}};
+  const pop=()=>{const top=heap[0],li=heap.pop(),lf=fs.pop();if(heap.length){heap[0]=li;fs[0]=lf;let k=0;for(;;){const a=2*k+1,b=a+1;let m=k;if(a<heap.length&&fs[a]<fs[m])m=a;if(b<heap.length&&fs[b]<fs[m])m=b;if(m===k)break;[heap[m],heap[k]]=[heap[k],heap[m]];[fs[m],fs[k]]=[fs[k],fs[m]];k=m;}}return top;};
+  gs[s]=0;push(s,hh(s));
+  while(heap.length){
+    const c=pop();if(done[c])continue;done[c]=1;if(c===g)break;
+    const ci=c%nx,cj=Math.floor(c/nx);
+    for(let dj=-1;dj<=1;dj++)for(let di=-1;di<=1;di++){
+      if(!di&&!dj)continue;const i=ci+di,j=cj+dj;if(i<0||j<0||i>=nx||j>=nz)continue;const k=j*nx+i;if(!ok[k]||done[k])continue;
+      if(di&&dj&&(!ok[cj*nx+i]||!ok[j*nx+ci]))continue;
+      const ng=gs[c]+(di&&dj?1.4142:1);if(ng<gs[k]){gs[k]=ng;came[k]=c;push(k,ng+hh(k));}
+    }
+  }
+  if(!done[g])return null;
+  const cells=[];for(let c=g;c>=0;c=came[c])cells.unshift(P(c));
+  cells[0]=from.slice();if(test(to[0],to[1]))cells[cells.length-1]=to.slice();
+  /* Straighten: keep a point only where the straight line to the next kept point would leave the walkable area. */
+  const clear=(a,b)=>{const L=Math.hypot(b[0]-a[0],b[1]-a[1]),n=Math.max(1,Math.ceil(L/(step/3)));for(let k=1;k<n;k++){const t=k/n;if(!test(a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t))return false;}return true;};
+  const out=[];let a=cells[0],k=1;
+  while(k<cells.length){let far=k;while(far+1<cells.length&&clear(a,cells[far+1]))far++;out.push(cells[far]);a=cells[far];k=far+1;}
+  return out;
+}
