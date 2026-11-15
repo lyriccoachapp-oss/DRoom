@@ -1,0 +1,228 @@
+<title>Roomtotal Early Access</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a calm product page. The signature element is the receipt: every render is paired with an itemised list and a total. */
+:root{
+  --bg:#F3F5F4; --surface:#FFFFFF; --ink:#13201C; --muted:#56635F; --line:#D6DDDA;
+  --accent:#0E6B5E; --accent-ink:#FFFFFF; --tag:#F4C542; --tag-ink:#2A2103; --render:#DDE2E8;
+  --f-display:"Bricolage Grotesque","Inter",system-ui,sans-serif;
+  --f-body:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0F1513; --surface:#171F1C; --ink:#E9EFEC; --muted:#9AA8A3; --line:#2A3531;
+    --accent:#46C2AE; --accent-ink:#05211C; --tag:#F4C542; --tag-ink:#2A2103; --render:#DDE2E8; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0F1513; --surface:#171F1C; --ink:#E9EFEC; --muted:#9AA8A3; --line:#2A3531;
+  --accent:#46C2AE; --accent-ink:#05211C; --tag:#F4C542; --tag-ink:#2A2103; --render:#DDE2E8; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg); color:var(--ink); font-family:var(--f-body); font-size:16px; line-height:1.55}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent); outline-offset:3px}
+.wrap{max-width:1120px; margin:0 auto; padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px))}
+h1,h2,h3{font-family:var(--f-display); letter-spacing:-.02em; line-height:1.08; margin:0; text-wrap:balance}
+h1{font-size:clamp(34px,5.4vw,60px); font-weight:800}
+h2{font-size:clamp(26px,3.4vw,38px); font-weight:800}
+h3{font-size:19px; font-weight:600; letter-spacing:-.01em}
+p{margin:0}
+.mono{font-family:var(--f-mono); font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+.btn{display:inline-flex; align-items:center; justify-content:center; gap:8px; background:var(--accent); color:var(--accent-ink); border:0; border-radius:10px; padding:14px 22px; font:600 16px var(--f-body); text-decoration:none; cursor:pointer}
+.btn:hover{filter:brightness(1.08)}
+.btn.ghost{background:transparent; color:var(--ink); border:1px solid var(--line)}
+
+.nav{display:flex; align-items:center; justify-content:space-between; gap:12px; padding-block:18px}
+.brand{font-family:var(--f-display); font-weight:800; font-size:22px; letter-spacing:-.02em; display:flex; align-items:center; gap:8px}
+.brand i{display:inline-block; width:18px; height:18px; background:var(--tag); border-radius:4px 4px 4px 0; transform:rotate(-8deg)}
+.nav .btn{padding:10px 16px; font-size:14px}
+
+.hero{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.1fr); gap:40px; align-items:center; padding-block:28px 160px}
+.hero-copy{display:flex; flex-direction:column; gap:20px; min-width:0}
+.eyebrow{font:500 13px var(--f-mono); letter-spacing:.04em; color:var(--muted)}
+.lead{font-size:18px; color:var(--muted); max-width:34em}
+.cta-row{display:flex; flex-wrap:wrap; gap:12px; align-items:center}
+.fine{font-size:14px; color:var(--muted)}
+.shot{position:relative; min-width:0}
+.render{background:var(--render); border:1px solid var(--line); border-radius:16px; overflow:hidden; aspect-ratio:4/3; max-width:100%}
+.render img{width:100%; height:100%; object-fit:cover; display:block; transform:scale(1.28)}
+.receipt{position:absolute; right:-6px; bottom:-120px; width:min(290px,78%); background:var(--surface); color:var(--ink); border:1px solid var(--line); border-radius:12px; padding:14px 16px; box-shadow:0 14px 34px rgba(10,25,20,.18); font-family:var(--f-mono); font-size:12.5px}
+.receipt .hd{display:flex; justify-content:space-between; gap:8px; color:var(--muted); padding-bottom:8px; border-bottom:1px dashed var(--line)}
+.receipt ul{list-style:none; margin:8px 0; padding:0; display:flex; flex-direction:column; gap:4px}
+.receipt li{display:flex; justify-content:space-between; gap:10px}
+.receipt li span:first-child{min-width:0; overflow-wrap:anywhere}
+.receipt .tot{display:flex; justify-content:space-between; align-items:center; gap:8px; padding-top:8px; border-top:1px dashed var(--line); font-weight:500; font-size:14px}
+.pricetag{background:var(--tag); color:var(--tag-ink); padding:2px 8px; border-radius:6px}
+
+section{padding-block:56px}
+.band{background:var(--surface); border-block:1px solid var(--line)}
+.sec-head{display:flex; flex-direction:column; gap:10px; margin-bottom:28px; max-width:40em}
+.steps{list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:20px; counter-reset:s}
+.steps li{counter-increment:s; display:flex; flex-direction:column; gap:8px; min-width:0}
+.steps li::before{content:counter(s); font:500 14px var(--f-mono); width:30px; height:30px; display:grid; place-items:center; border:1px solid var(--ink); border-radius:50%}
+.cmp-wrap{overflow-x:auto}
+table.cmp{width:100%; border-collapse:collapse; min-width:560px}
+.cmp th,.cmp td{text-align:left; padding:14px 12px; border-bottom:1px solid var(--line); vertical-align:top}
+.cmp thead th{font:500 13px var(--f-mono); letter-spacing:.04em; color:var(--muted)}
+.cmp tbody th{font-weight:600; width:22%}
+.cmp td:last-child{font-weight:500}
+.cmp td:nth-child(2){color:var(--muted)}
+.gallery{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px}
+.gallery figure{margin:0; display:flex; flex-direction:column; gap:8px; min-width:0}
+.gallery figcaption{font-size:14px; color:var(--muted)}
+.price{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:32px; align-items:start}
+.price-card{background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:28px; display:flex; flex-direction:column; gap:16px}
+.amount{font:500 52px/1 var(--f-mono); letter-spacing:-.04em}
+.amount small{font-size:15px; letter-spacing:0; color:var(--muted)}
+.incl{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px}
+.incl li{padding-left:22px; position:relative}
+.incl li::before{content:""; position:absolute; left:2px; top:.55em; width:10px; height:6px; border-left:2px solid var(--accent); border-bottom:2px solid var(--accent); transform:rotate(-45deg)}
+.notice{font-size:14px; border:1px dashed var(--line); border-radius:8px; padding:10px 12px; color:var(--muted)}
+.faq{display:flex; flex-direction:column; max-width:760px}
+.faq details{border-bottom:1px solid var(--line); padding-block:14px}
+.faq summary{cursor:pointer; font-weight:600; font-size:17px}
+.faq p{color:var(--muted); padding-top:8px; max-width:62ch}
+footer{padding-block:28px 40px; font-size:14px; color:var(--muted)}
+
+@media (max-width:860px){
+  .hero{grid-template-columns:minmax(0,1fr); padding-block:12px 160px}
+  .steps,.gallery,.price{grid-template-columns:minmax(0,1fr)}
+  .receipt{right:8px}
+}
+</style>
+
+<header class="wrap nav">
+  <div class="brand"><i></i>Roomtotal</div>
+  <a class="btn" href="#pricing">Get early access</a>
+</header>
+
+<main>
+  <div class="wrap hero">
+    <div class="hero-copy">
+      <p class="eyebrow">3D HOME PLANNER · REAL PRODUCTS · REAL PRICES</p>
+      <h1>Furnish your floor plan with things you can actually buy.</h1>
+      <p class="lead">Upload a plan or measure the room with your phone. Roomtotal builds a furnished 3D home from real store products, so you see every price, every dimension and one total before you spend anything.</p>
+      <div class="cta-row">
+        <a class="btn" href="#pricing">Get early access · $49 one-time</a>
+        <a class="btn ghost" href="#how">How it works</a>
+      </div>
+      <p class="fine">No subscription. No drawing skills. Runs in your browser.</p>
+    </div>
+    <div class="shot">
+      <div class="render"><img src="img/living.jpg" alt="3D render of a furnished living room with a sofa, armchair, coffee table, TV stand, bookshelf and floor lamp" width="1200" height="900"></div>
+      <div class="receipt" aria-label="Sample shopping list for the room shown">
+        <div class="hd"><span>LIVING ROOM</span><span>17'9" × 13'9"</span></div>
+        <ul>
+          <li><span>Sofa, 4-seat</span><span>$1,399</span></li>
+          <li><span>Armchair</span><span>$469</span></li>
+          <li><span>Area rug 6'7" × 9'10"</span><span>$439</span></li>
+          <li><span>TV stand 71"</span><span>$449</span></li>
+          <li><span>Bookshelf 47"</span><span>$389</span></li>
+          <li><span>Coffee table</span><span>$219</span></li>
+          <li><span>Floor lamp</span><span>$69</span></li>
+        </ul>
+        <div class="tot"><span>TOTAL</span><span class="pricetag">$3,433</span></div>
+      </div>
+    </div>
+  </div>
+
+  <section class="band" id="how">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2>From empty room to shopping list in three steps</h2>
+      </div>
+      <ol class="steps">
+        <li><h3>Get your plan in</h3><p class="muted">Upload a floor plan, or walk the room and tap each corner with your phone camera. Doors and windows are placed to scale.</p></li>
+        <li><h3>Set a style and a budget</h3><p class="muted">Pick a look and a spending limit. The planner places furniture that fits the room, keeps walkways clear and stays inside the budget.</p></li>
+        <li><h3>Walk through, swap, buy</h3><p class="muted">Step inside in 3D. Replace any piece with an alternative and watch the total update. Leave with an itemised list.</p></li>
+      </ol>
+    </div>
+  </section>
+
+  <section>
+    <div class="wrap">
+      <div class="sec-head">
+        <h2>A render is not a plan to buy</h2>
+        <p class="muted">Most room planners stop at a nice picture. The hard part starts after: finding pieces that look like it, fit the space and add up to a number you can afford.</p>
+      </div>
+      <div class="cmp-wrap">
+        <table class="cmp">
+          <thead><tr><th></th><th>TYPICAL 3D PLANNER</th><th>ROOMTOTAL</th></tr></thead>
+          <tbody>
+            <tr><th>Furniture</th><td>Generic models with no price</td><td>Real products with price and exact size</td></tr>
+            <tr><th>Budget</th><td>You find out at the store</td><td>You set it first, the design fits it</td></tr>
+            <tr><th>Your plan</th><td>Draw it yourself</td><td>Upload it, or tap the corners with your phone</td></tr>
+            <tr><th>Result</th><td>An image or a video</td><td>A 3D walk-through and a shopping list with one total</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2>Same engine, any room</h2>
+        <p class="muted">These are renders from the working prototype. Furniture models shown are simple placeholders; store products replace them at launch.</p>
+      </div>
+      <div class="gallery">
+        <figure><div class="render"><img src="img/bedroom.jpg" alt="3D render of a bedroom with a bed, nightstands, wardrobe and dresser" width="1200" height="900" loading="lazy"></div><figcaption>Bedroom, darker palette, $6,000 budget</figcaption></figure>
+        <figure><div class="render"><img src="img/walk.jpg" alt="Eye-level view from inside a furnished living room" width="1200" height="900" loading="lazy"></div><figcaption>Walk-through view at eye level</figcaption></figure>
+        <figure><div class="render"><img src="img/top.jpg" alt="Top-down view of a furnished living room" width="1200" height="900" loading="lazy"></div><figcaption>Top view, drawn to scale</figcaption></figure>
+      </div>
+    </div>
+  </section>
+
+  <section id="pricing">
+    <div class="wrap price">
+      <div class="sec-head">
+        <h2>One payment. Your whole home.</h2>
+        <p class="muted">You plan a home once, so you pay once. Early-access members get the founding price and use the planner first, while store catalogs are being added.</p>
+        <p class="muted">Roomtotal is in development. If it does not launch, or you change your mind before launch, you get a full refund.</p>
+      </div>
+      <div class="price-card">
+        <div class="eyebrow">FOUNDING ACCESS</div>
+        <div class="amount">$49 <small>one-time</small></div>
+        <ul class="incl">
+          <li>Every room in one home, unlimited redesigns</li>
+          <li>Plan upload and phone corner-tap measuring</li>
+          <li>3D walk-through and top view</li>
+          <li>Itemised shopping list with total</li>
+          <li>All catalogs added after launch</li>
+        </ul>
+        <button class="btn" id="checkout" type="button">Reserve early access</button>
+        <p class="notice" id="checkoutNote" hidden>Checkout is not connected yet.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="wrap">
+      <div class="sec-head"><h2>Questions</h2></div>
+      <div class="faq">
+        <details><summary>Which stores are in the catalog?</summary><p>Catalogs are added through retailer partner programs, starting with major home and furniture stores in the US and Canada. Early-access members see the list first.</p></details>
+        <details><summary>Do I need a special phone to measure a room?</summary><p>No. Corner-tap measuring uses the regular camera on a recent iPhone or Android phone. You can also upload a floor plan or type the room size in.</p></details>
+        <details><summary>How accurate is it?</summary><p>Product sizes come from the store listing. Phone measuring is close enough for furniture; for anything built to fit, check one wall with a tape measure and the plan adjusts to it.</p></details>
+        <details><summary>Is this a subscription?</summary><p>No. One payment covers one home, with no monthly fee.</p></details>
+        <details><summary>When does it launch?</summary><p>The layout engine already works. Plan upload, measuring and store catalogs are in progress, and early-access members get each part as it ships.</p></details>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="wrap">Roomtotal · working name · contact address to be added</footer>
+
+<script>
+(function(){
+  var CHECKOUT_URL = ''; // paste the payment link here
+  var b = document.getElementById('checkout'), n = document.getElementById('checkoutNote');
+  b.addEventListener('click', function(){
+    if (CHECKOUT_URL) { window.location.href = CHECKOUT_URL; return; }
+    n.hidden = false;
+  });
+})();
+</script>
