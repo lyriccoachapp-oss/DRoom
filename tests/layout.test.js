@@ -132,3 +132,18 @@ test('the plan detector recognizes an L-shaped room', () => {
   assert.ok(b.cut && b.cut.corner === 'NE', 'notch found in the north-east corner');
   assert.ok(Math.abs(b.cut.w - 98 / 240) < 0.08 && Math.abs(b.cut.h - 78 / 180) < 0.08, `notch size ${b.cut.w.toFixed(2)} x ${b.cut.h.toFixed(2)}`);
 });
+
+test('door types keep their own clear zones and change how close furniture may come', () => {
+  const zoneArea = z => 4 * z.hx * z.hz;
+  for (const type of types) for (const doorType of ['swing', 'pocket', 'barn', 'open']) for (const side of ['left', 'right']) for (const swing of ['in', 'out']) for (const dw of walls) {
+    ctx.__room = { id: 'x', name: type, type, x: 0, y: 0, W: 4.6, D: 3.8, doorWall: dw, doorPos: 0.5, winWall: 'N', winPos: 0.6, overrides: {}, removed: [], doorType, doorSide: side, doorSwing: swing, doorWidth: 0.86 };
+    const p = run('planRoom(__room, "modern", 20000)');
+    assert.strictEqual(p.r.door.type, doorType);
+    for (const q of p.placed) if (!q.flat) for (const z of p.r.keepClear) assert.ok(!overlaps(q, z), `${type} ${doorType} ${side} ${swing} ${dw}: ${q.cat} in the door's clear zone`);
+    const rg = run(`sideRange(roomGeom(__room), ${JSON.stringify(p.r.door.wall)})`), w = p.r.door.width;
+    const need = doorType === 'pocket' || doorType === 'barn' ? (side === 'left' ? [w * 1.5, w / 2] : [w / 2, w * 1.5]) : [w / 2, w / 2];
+    assert.ok(p.r.door.t - need[0] >= rg[0] - 1e-6 && p.r.door.t + need[1] <= rg[1] + 1e-6, `${doorType} ${side}: no wall left for the leaf`);
+    const big = doorType === 'swing' && swing === 'in';
+    assert.ok(big ? zoneArea(p.r.doorRect) > 0.9 : zoneArea(p.r.doorRect) < 0.7, `${doorType} ${swing}: clear zone size`);
+  }
+});

@@ -78,6 +78,14 @@
       const nm = $('#inName'); if (document.activeElement !== nm) nm.value = r.name;
       $('#selType').value = r.type;
       $('#selShape').value = cutOf(r) ? r.cut.corner : '';
+      const dd = doorOf(r), ws = $('#selDoorW');
+      $('#selDoor').value = dd.type;
+      Array.from(ws.options).forEach(op => { const v = parseFloat(op.value); op.textContent = UNITS.v === 'm' ? Math.round(v * 100) + ' cm' : Math.round(v / 0.0254) + ' in'; });
+      ws.value = Array.from(ws.options).map(op => op.value).sort((a, b) => Math.abs(a - dd.width) - Math.abs(b - dd.width))[0];
+      $('#btnDoorSide').hidden = dd.type === 'open';
+      $('#btnDoorSide').textContent = dd.type === 'swing' ? 'Flip hinge side' : 'Slide the other way';
+      $('#btnDoorSwing').hidden = dd.type !== 'swing';
+      $('#btnDoorSwing').textContent = dd.swing === 'in' ? 'Open outward' : 'Open inward';
       $('#inW').value = r.W; $('#inD').value = r.D; $('#outW').textContent = fmtLen(r.W); $('#outD').textContent = fmtLen(r.D);
     }
     const area = state.rooms.reduce((s, x) => s + roomArea(x), 0);
@@ -181,6 +189,10 @@
   });
   $('#inBudget').addEventListener('input', e => { state.budget = parseInt(e.target.value, 10); update(); });
   $('#inName').addEventListener('input', e => { const r = room(); if (r) { r.name = e.target.value.trim() || ROOMS[r.type].name; update(); } });
+  $('#selDoor').addEventListener('change', e => { const r = room(); if (r) { r.doorType = e.target.value; update(); } });
+  $('#selDoorW').addEventListener('change', e => { const r = room(); if (r) { r.doorWidth = parseFloat(e.target.value); update(); } });
+  $('#btnDoorSide').addEventListener('click', () => { const r = room(); if (r) { r.doorSide = doorOf(r).side === 'left' ? 'right' : 'left'; update(); } });
+  $('#btnDoorSwing').addEventListener('click', () => { const r = room(); if (r) { r.doorSwing = doorOf(r).swing === 'in' ? 'out' : 'in'; update(); } });
   $('#selShape').addEventListener('change', e => {
     const r = room(); if (!r) return; const v = e.target.value;
     if (!v) delete r.cut;

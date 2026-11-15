@@ -69,6 +69,15 @@ function wallSegments(r){
   return segs;
 }
 
+/* A room's door: type 'swing' (hinged), 'pocket' (slides into the wall), 'barn' (slides along the wall face) or 'open' (no leaf).
+   side 'left' or 'right' is the end of the opening, in increasing t along the wall, that holds the hinge or that the leaf slides to.
+   swing 'in' or 'out' says which way a hinged leaf opens. width is the clear opening in metres. */
+const DOOR_TYPES=['swing','pocket','barn','open'];
+function doorOf(room){
+  return {type:DOOR_TYPES.indexOf(room.doorType)>=0?room.doorType:'swing',side:room.doorSide==='right'?'right':'left',
+    swing:room.doorSwing==='out'?'out':'in',width:clamp(Number(room.doorWidth)||0.81,0.6,1.2)};
+}
+
 /* Geometry of one room: door and window positions clamped to their walls, plus the zones they keep clear. */
 function roomGeom(room){
   const r={W:room.W,D:room.D};
@@ -81,15 +90,26 @@ function roomGeom(room){
     if(rg[1]-rg[0]<half*2+0.1){wall=Object.keys(WALLS).sort((a,b)=>{const ra=sideRange(r,a),rb=sideRange(r,b);return (rb[1]-rb[0])-(ra[1]-ra[0]);})[0];rg=sideRange(r,wall);}
     return {wall,t:clamp(pos*wallLen(r,wall),rg[0]+half,rg[1]-half)};
   };
-  r.door=place(room.doorWall,room.doorPos,0.55);
+  const dd=doorOf(room),slides=dd.type==='pocket'||dd.type==='barn';
+  r.door=place(room.doorWall,room.doorPos,dd.width/2+0.1+(slides?dd.width/2:0));
+  Object.assign(r.door,dd);
+  if(slides){ /* the leaf needs a full door width of wall on its sliding side */
+    const rg=sideRange(r,r.door.wall),lo=rg[0]+dd.width/2+0.1+(dd.side==='left'?dd.width:0),hi=rg[1]-dd.width/2-0.1-(dd.side==='right'?dd.width:0);
+    r.door.t=lo<=hi?clamp(r.door.t,lo,hi):(rg[0]+rg[1])/2;
+  }
   r.win=place(room.winWall,room.winPos,0.8);
-  r.doorRect=at(r,r.door.wall,r.door.t,0.5,1.0,1.0);
+  /* What furniture must leave clear: an inward hinged door sweeps a square of its own width; every other door only needs a passage.
+     A barn door also needs the wall beside the opening that its leaf slides over. */
+  const w=dd.width;
+  r.doorRect=dd.type==='swing'&&dd.swing==='in'?at(r,r.door.wall,r.door.t,w/2+0.05,w+0.1,w+0.1):at(r,r.door.wall,r.door.t,0.35,w+0.1,0.7);
+  r.keepClear=[r.doorRect];
+  if(dd.type==='barn')r.keepClear.push(at(r,r.door.wall,r.door.t+(dd.side==='left'?-w:w),0.09,w,0.18));
   r.winRect=at(r,r.win.wall,r.win.t,0.2,1.4,0.4);
   return r;
 }
 function runLayout(r,want,forced){
   const placed=[];
-  const fits=(rect,h)=>inRoom(r,rect)&&!overlap(rect,r.doorRect)&&!(h>0.85&&overlap(rect,r.winRect))&&placed.every(p=>p.flat||!overlap(rect,p,0.04));
+  const fits=(rect,h)=>inRoom(r,rect)&&!r.keepClear.some(z=>overlap(rect,z))&&!(h>0.85&&overlap(rect,r.winRect))&&placed.every(p=>p.flat||!overlap(rect,p,0.04));
   const clearOk=c=>!c||placed.every(p=>p.flat||!overlap(c,p));
   const add=(cat,si,rect,extra)=>{const sz=CATS[cat].sizes[si];const p=Object.assign({cat,si,w:sz[0],d:sz[1],h:sz[2]},rect,extra||{});placed.push(p);return p;};
   const sizes=cat=>forced[cat]!=null?[forced[cat]]:CATS[cat].sizes.map((_,i)=>i).reverse();
