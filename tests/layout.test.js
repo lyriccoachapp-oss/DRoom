@@ -87,3 +87,9 @@ test('the plan detector finds the rooms of a drawn plan and ignores the outside'
   assert.ok(big.ext.W && big.ext.N && big.ext.S && !big.ext.E, 'outside walls of the left room');
   for (const b of boxes) assert.ok(b.x > 0.05 && b.y > 0.05 && b.x + b.w < 0.95 && b.y + b.h < 0.95, 'no box covers the margin');
 });
+
+test('printed drawing scales are read from sheet text', () => {
+  ctx.__t = ['SCALE: 3/16" = 1\'-0"', 'Floor plan  1/4″ = 1′', 'Scale 1:50', 'GROUND FLOOR 1:100 A-101', 'Issued 1:30 pm', 'no scale here'];
+  const r = run('__t.map(t => { const s = PlanRecognizer.scaleFromText(t); return s ? s.ratio : null; })');
+  assert.strictEqual(Array.from(r).join(','), '64,48,50,100,,');
+});
