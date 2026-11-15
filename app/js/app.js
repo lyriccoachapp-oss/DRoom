@@ -41,7 +41,8 @@
     if (!room() && state.rooms.length) state.roomId = state.rooms[0].id;
     clash = new Set(); const names = [];
     state.rooms.forEach((a, i) => state.rooms.slice(i + 1).forEach(b => {
-      if (Math.min(a.x + a.W, b.x + b.W) - Math.max(a.x, b.x) > 0.05 && Math.min(a.y + a.D, b.y + b.D) - Math.max(a.y, b.y) > 0.05) { clash.add(a.id); clash.add(b.id); names.push(a.name + ' and ' + b.name); }
+      const hit = roomRects(a).some(p => roomRects(b).some(q => Math.min(p.x1, q.x1) - Math.max(p.x0, q.x0) > 0.05 && Math.min(p.z1, q.z1) - Math.max(p.z0, q.z0) > 0.05));
+      if (hit) { clash.add(a.id); clash.add(b.id); names.push(a.name + ' and ' + b.name); }
     }));
     clashText = names.length ? 'Rooms overlap: ' + names.join('; ') + '. Move or resize one of them.' : '';
   }
@@ -76,9 +77,10 @@
     if (r) {
       const nm = $('#inName'); if (document.activeElement !== nm) nm.value = r.name;
       $('#selType').value = r.type;
+      $('#selShape').value = cutOf(r) ? r.cut.corner : '';
       $('#inW').value = r.W; $('#inD').value = r.D; $('#outW').textContent = fmtLen(r.W); $('#outD').textContent = fmtLen(r.D);
     }
-    const area = state.rooms.reduce((s, x) => s + x.W * x.D, 0);
+    const area = state.rooms.reduce((s, x) => s + roomArea(x), 0);
     $('#homeDims').textContent = state.rooms.length + (state.rooms.length === 1 ? ' room · ' : ' rooms · ') + fmtArea(area);
     $('#hint').textContent = state.view === 'plan' ? 'Drag rooms, corners and markers to edit the plan'
       : state.view === 'walk' ? 'Drag to look around · W A S D or arrows to walk'
@@ -179,6 +181,13 @@
   });
   $('#inBudget').addEventListener('input', e => { state.budget = parseInt(e.target.value, 10); update(); });
   $('#inName').addEventListener('input', e => { const r = room(); if (r) { r.name = e.target.value.trim() || ROOMS[r.type].name; update(); } });
+  $('#selShape').addEventListener('change', e => {
+    const r = room(); if (!r) return; const v = e.target.value;
+    if (!v) delete r.cut;
+    else if (r.W < 2.8 || r.D < 2.8) { e.target.value = ''; toast = 'A room needs to be at least 9\u2032 \u00d7 9\u2032 (2.8 m) on both sides to take an L shape.'; update(); return; }
+    else r.cut = { corner: v, w: r.cut ? r.cut.w : Math.round(r.W * 4) / 10, d: r.cut ? r.cut.d : Math.round(r.D * 4) / 10 };
+    r.overrides = {}; update();
+  });
   $('#inW').addEventListener('input', e => { const r = room(); if (r) { r.W = parseFloat(e.target.value); update(); } });
   $('#inD').addEventListener('input', e => { const r = room(); if (r) { r.D = parseFloat(e.target.value); update(); } });
   function addRoom(type) {
@@ -286,6 +295,7 @@
       const dx = cx - (r.x + r.W / 2), dy = cy - (r.y + r.D / 2);
       r.doorWall = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'E' : 'W') : (dy > 0 ? 'S' : 'N'); r.winWall = OPP[r.doorWall]; r.doorPos = 0.5; r.winPos = 0.5;
       const b = list[rooms.indexOf(r)];
+      if (b.cut && b.cut.w > 0 && b.cut.h > 0 && r.W >= 2.8 && r.D >= 2.8) r.cut = { corner: b.cut.corner, w: Math.round(b.cut.w * r.W * 10) / 10, d: Math.round(b.cut.h * r.D * 10) / 10 };
       if (b.door) { r.doorWall = b.door.wall; r.doorPos = b.door.pos; r.winWall = OPP[r.doorWall]; }
       if (b.ext) {                                   /* window on the longest outside wall that is not the door wall */
         const cand = ['N', 'S', 'W', 'E'].filter(wl => b.ext[wl] && wl !== r.doorWall).sort((p, q) => (q === 'N' || q === 'S' ? r.W : r.D) - (p === 'N' || p === 'S' ? r.W : r.D));

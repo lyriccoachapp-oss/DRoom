@@ -38,24 +38,29 @@ const Scene3D = (function () {
      The wall is a group scaled along Y, so it can grow from the floor and drop to a stub when it would block the view. */
   const WT = 0.06, LOW = 0.05;
   let walls = [], wallMemo = {};
-  function buildWall(r, o, w, wm, white, S) {
-    const len = wallLen(r, w), n = WALLS[w].n, hz = WALLS[w].horiz, g = new THREE.Group();
+  function buildWall(r, o, seg, wm, white, S) {
+    const n = seg.n, g = new THREE.Group(), L = Math.hypot(seg.b[0] - seg.a[0], seg.b[1] - seg.a[1]);
+    const dir = [(seg.b[0] - seg.a[0]) / L, (seg.b[1] - seg.a[1]) / L], hz = Math.abs(dir[0]) > 0.5;
+    const pt = t => [seg.a[0] + dir[0] * t, seg.a[1] + dir[1] * t];
     const box = (t0, t1, y0, y1, mat, depth, off) => {
       if (t1 - t0 < 0.005 || y1 - y0 < 0.005) return null;
-      const d = depth || WT, c = wallPoint(r, w, (t0 + t1) / 2), q = (off == null ? d / 2 : off);
+      const d = depth || WT, c = pt((t0 + t1) / 2), q = (off == null ? d / 2 : off);
       const m = new THREE.Mesh(new THREE.BoxGeometry(hz ? t1 - t0 : d, y1 - y0, hz ? d : t1 - t0), mat);
       m.position.set(c[0] + n[0] * q, (y0 + y1) / 2, c[1] + n[1] * q); m.receiveShadow = true; g.add(m); return m;
     };
+    /* Openings sit on the room's sides; t on a side is shifted to t along this segment. */
     const ops = [];
-    if (r.door.wall === w) ops.push({ t0: r.door.t - 0.45, t1: r.door.t + 0.45, y0: 0, y1: 2.05, door: true });
-    if (r.win.wall === w && !(ops.length && r.win.t - 0.7 < ops[0].t1 && r.win.t + 0.7 > ops[0].t0)) ops.push({ t0: r.win.t - 0.7, t1: r.win.t + 0.7, y0: 0.9, y1: 2.2 });
+    if (seg.side && r.door.wall === seg.side) ops.push({ t0: r.door.t - seg.t0 - 0.45, t1: r.door.t - seg.t0 + 0.45, y0: 0, y1: 2.05, door: true });
+    if (seg.side && r.win.wall === seg.side) { const w0 = r.win.t - seg.t0 - 0.7, w1 = w0 + 1.4; if (!(ops.length && w0 < ops[0].t1 && w1 > ops[0].t0)) ops.push({ t0: w0, t1: w1, y0: 0.9, y1: 2.2 }); }
+    ops.forEach(op => { op.t0 = clamp(op.t0, 0, L); op.t1 = clamp(op.t1, 0, L); });
     ops.sort((a, b) => a.t0 - b.t0);
     let cur = 0;
     ops.forEach(op => {
+      if (op.t1 - op.t0 < 0.2) return;
       box(cur, op.t0, 0, H, wm); box(op.t0, op.t1, 0, op.y0, wm); box(op.t0, op.t1, op.y1, H, wm); cur = op.t1;
       if (op.door) {
-        const a = hz ? [1, 0] : [0, 1], ang = 1.3, d = [a[0] * Math.cos(ang) + n[0] * Math.sin(ang), a[1] * Math.cos(ang) + n[1] * Math.sin(ang)];
-        const hinge = wallPoint(r, w, op.t0), piv = new THREE.Group();
+        const ang = 1.3, d = [dir[0] * Math.cos(ang) + n[0] * Math.sin(ang), dir[1] * Math.cos(ang) + n[1] * Math.sin(ang)];
+        const hinge = pt(op.t0), piv = new THREE.Group();
         piv.position.set(hinge[0] + n[0] * WT, 0, hinge[1] + n[1] * WT); piv.rotation.y = Math.atan2(-d[1], d[0]);
         const leaf = new THREE.Mesh(new THREE.BoxGeometry(0.86, 2.0, 0.04), M(shade(S.wood[1], -0.12), 0.7)); leaf.position.set(0.43, 1.0, 0); leaf.castShadow = true;
         piv.add(leaf); g.add(piv);
@@ -65,11 +70,19 @@ const Scene3D = (function () {
         const mid = (op.t0 + op.t1) / 2; box(mid - 0.02, mid + 0.02, op.y0, op.y1, white, WT + 0.02, WT / 2);
       }
     });
-    box(cur, len, 0, H, wm);
-    const key = o.id + ':' + w, c = wallPoint(r, w, len / 2), start = wallMemo[key] == null ? 0.02 : wallMemo[key];
+    box(cur, L, 0, H, wm);
+    const key = o.id + ':' + seg.a.join(',') + ':' + seg.b.join(','), c = pt(L / 2), start = wallMemo[key] == null ? 0.02 : wallMemo[key];
     g.scale.y = start;
     walls.push({ g, key, nx: -n[0], nz: -n[1], cx: o.x + c[0], cz: o.y + c[1], cur: start });
     return g;
+  }
+  /* A flat mesh in the room's outline. Floor faces up from y = 0, ceiling faces down at y = H. */
+  function outlineMesh(room, mat, ceiling) {
+    const pts = roomPolygon(room), sh = new THREE.Shape();
+    pts.forEach((p, i) => { const y = ceiling ? p[1] : -p[1]; if (i) sh.lineTo(p[0], y); else sh.moveTo(p[0], y); });
+    const m = new THREE.Mesh(new THREE.ShapeGeometry(sh), mat);
+    m.rotation.x = ceiling ? Math.PI / 2 : -Math.PI / 2; if (ceiling) m.position.y = H;
+    return m;
   }
   function animateWalls() {
     const cp = T.camera.position; let moving = false;
@@ -96,13 +109,12 @@ const Scene3D = (function () {
       let fmat;
       if (fin) {
         const tile = fin.cat === 'tile', tex = (tile ? tileTexture(fin.item.c1) : base).clone(); tex.needsUpdate = true;
-        tex.repeat.set(tile ? r.W / 1.6 : r.W / 2.2, tile ? r.D / 1.6 : r.D / 2.2); texes.push(tex);
+        tex.repeat.set(tile ? 1 / 1.6 : 1 / 2.2, tile ? 1 / 1.6 : 1 / 2.2); texes.push(tex);
         fmat = new THREE.MeshStandardMaterial({ map: tex, roughness: tile ? 0.45 : 0.75 });
       } else fmat = M(0x9a9a98, 0.95);
-      const fl = new THREE.Mesh(new THREE.PlaneGeometry(r.W, r.D), fmat);
-      fl.rotation.x = -Math.PI / 2; fl.position.set(r.W / 2, 0, r.D / 2); fl.receiveShadow = true; g.add(fl);
-      const ceil = new THREE.Mesh(new THREE.PlaneGeometry(r.W, r.D), M(0xf7f6f3, 1)); ceil.rotation.x = Math.PI / 2; ceil.position.set(r.W / 2, H, r.D / 2); g.add(ceil);
-      for (const w in WALLS) g.add(buildWall(r, o, w, wm, white, S));
+      const fl = outlineMesh(o, fmat, false); fl.receiveShadow = true; g.add(fl);
+      g.add(outlineMesh(o, M(0xf7f6f3, 1), true));
+      wallSegments(r).forEach(seg => g.add(buildWall(r, o, seg, wm, white, S)));
       T.roomG.add(g);
       const byCat = {}; pl.lines.forEach(l => byCat[l.cat] = l.item);
       pl.placed.forEach(q => {
@@ -129,8 +141,12 @@ const Scene3D = (function () {
     }
     T.dirty = true;
   }
-  function inside(x, z) { return plans.some(pl => { const o = pl.room; return x >= o.x + 0.15 && x <= o.x + o.W - 0.15 && z >= o.y + 0.15 && z <= o.y + o.D - 0.15; }) ||
-    plans.filter(pl => { const o = pl.room; return x >= o.x - 0.16 && x <= o.x + o.W + 0.16 && z >= o.y - 0.16 && z <= o.y + o.D + 0.16; }).length > 1; }
+  /* Walking stays inside rooms; a point near a shared edge of two rectangles (a doorway between rooms, or the two halves of an L) is allowed. */
+  function inside(x, z) {
+    const rects = []; plans.forEach(pl => rects.push.apply(rects, roomRects(pl.room)));
+    const inR = (q, m) => x >= q.x0 + m && x <= q.x1 - m && z >= q.z0 + m && z <= q.z1 - m;
+    return rects.some(q => inR(q, 0.15)) || rects.filter(q => inR(q, -0.16)).length > 1;
+  }
   function enterWalk(pl) {
     if (!pl) return;
     const r = pl.r, o = pl.room, n = WALLS[r.door.wall].n, pt = wallPoint(r, r.door.wall, r.door.t);
