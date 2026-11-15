@@ -73,7 +73,8 @@ const ROOMS = {
   kitchen: { name: 'Kitchen', weight: 1.3, all: ['cabrun', 'range', 'fridge', 'tile', 'uppers', 'island'], required: ['cabrun', 'range', 'fridge'] },
   bathroom: { name: 'Bathroom', weight: 0.6, all: ['vanity', 'toilet', 'tub', 'shower', 'tile', 'bathcab'], required: ['vanity', 'toilet'] },
   dining: { name: 'Dining room', weight: 0.7, all: ['dtable', 'dchair', 'floor', 'sideboard', 'rug', 'lamp', 'plant'], required: ['dtable', 'dchair'] },
-  office: { name: 'Office', weight: 0.6, all: ['desk', 'ochair', 'floor', 'shelf', 'rug', 'lamp', 'plant'], required: ['desk', 'ochair'] }
+  office: { name: 'Office', weight: 0.6, all: ['desk', 'ochair', 'floor', 'shelf', 'rug', 'lamp', 'plant'], required: ['desk', 'ochair'] },
+  hall: { name: 'Hallway', weight: 0.15, all: ['floor'], required: [] }
 };
 const CATALOG = [], BYID = {};
 const idOf = (cat, style, tier, si) => cat + '-' + style + '-' + tier + '-' + si;

@@ -279,6 +279,12 @@
     rooms.forEach(r => {
       const dx = cx - (r.x + r.W / 2), dy = cy - (r.y + r.D / 2);
       r.doorWall = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'E' : 'W') : (dy > 0 ? 'S' : 'N'); r.winWall = OPP[r.doorWall]; r.doorPos = 0.5; r.winPos = 0.5;
+      const b = list[rooms.indexOf(r)];
+      if (b.door) { r.doorWall = b.door.wall; r.doorPos = b.door.pos; r.winWall = OPP[r.doorWall]; }
+      if (b.ext) {                                   /* window on the longest outside wall that is not the door wall */
+        const cand = ['N', 'S', 'W', 'E'].filter(wl => b.ext[wl] && wl !== r.doorWall).sort((p, q) => (q === 'N' || q === 'S' ? r.W : r.D) - (p === 'N' || p === 'S' ? r.W : r.D));
+        if (cand.length) r.winWall = cand[0];
+      }
       seen[r.name] = (seen[r.name] || 0) + 1; if (seen[r.name] > 1) r.name = (r.name + ' ' + seen[r.name]).slice(0, 24);
     });
     return rooms;

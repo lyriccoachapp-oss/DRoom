@@ -82,5 +82,8 @@ test('the plan detector finds the rooms of a drawn plan and ignores the outside'
   assert.strictEqual(boxes.length, 3);
   const big = boxes[0];
   assert.ok(Math.abs(big.x - 30 / 300) < 0.03 && Math.abs(big.w - 130 / 300) < 0.05 && Math.abs(big.h - 160 / 200) < 0.06, 'largest room matches the left room');
+  assert.strictEqual(big.door && big.door.wall, 'E', 'the left room has its doorway in the east partition');
+  assert.ok(Math.abs(big.door.pos - (99 - 20) / 160) < 0.08, 'doorway position along the wall');
+  assert.ok(big.ext.W && big.ext.N && big.ext.S && !big.ext.E, 'outside walls of the left room');
   for (const b of boxes) assert.ok(b.x > 0.05 && b.y > 0.05 && b.x + b.w < 0.95 && b.y + b.h < 0.95, 'no box covers the margin');
 });
