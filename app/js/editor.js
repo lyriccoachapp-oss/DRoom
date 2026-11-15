@@ -35,6 +35,29 @@ const PlanEditor = (function () {
     const a = wallPoint(r, w, t - wd / 2), b = wallPoint(r, w, t + wd / 2), c = wallPoint(r, w, t);
     return { x1: (o.x + a[0]) * S, y1: (o.y + a[1]) * S, x2: (o.x + b[0]) * S, y2: (o.y + b[1]) * S, cx: (o.x + c[0]) * S, cy: (o.y + c[1]) * S };
   }
+  /* Plan symbol for the door, drawn the way architectural plans show it. */
+  function doorSymbol(o, r, g) {
+    const dr = r.door, w = dr.width, n = WALLS[dr.wall].n, hz = WALLS[dr.wall].horiz, along = hz ? [1, 0] : [0, 1], left = dr.side === 'left';
+    const P = (t, off) => { const p = wallPoint(r, dr.wall, t); return [(o.x + p[0] + n[0] * off) * S, (o.y + p[1] + n[1] * off) * S]; };
+    const t0 = dr.t - w / 2, t1 = dr.t + w / 2;
+    if (dr.type === 'swing') {
+      /* Leaf drawn fully open, plus the quarter circle its edge sweeps. */
+      const hinge = left ? t0 : t1, a = left ? 1 : -1, s = dr.swing === 'in' ? 1 : -1, pts = [];
+      for (let k = 0; k <= 12; k++) {
+        const th = Math.PI / 2 * k / 12, lt = hinge + a * w * Math.cos(th), off = s * w * Math.sin(th);
+        pts.push(P(lt, off));
+      }
+      const h = P(hinge, 0), tip = pts[pts.length - 1];
+      el('line', { x1: h[0], y1: h[1], x2: tip[0], y2: tip[1], class: 'leaf' }, g);
+      el('polyline', { points: pts.map(p => p.join(',')).join(' '), class: 'swingarc' }, g);
+    } else if (dr.type === 'pocket') {
+      const a = left ? P(t0 - w, 0.03) : P(t1, 0.03), b = left ? P(t0 + 0.15 * w, 0.03) : P(t1 + w, 0.03);
+      el('line', { x1: a[0], y1: a[1], x2: b[0], y2: b[1], class: 'leaf pocket' }, g);
+    } else if (dr.type === 'barn') {
+      const a = left ? P(t0 - w, 0.1) : P(t1 - 0.04, 0.1), b = left ? P(t0 + 0.04, 0.1) : P(t1 + w, 0.1);
+      el('line', { x1: a[0], y1: a[1], x2: b[0], y2: b[1], class: 'leaf barn' }, g);
+    }
+  }
   function render() {
     const st = get();
     if (!drag || !fitted) fit(st.rooms);
@@ -50,8 +73,9 @@ const PlanEditor = (function () {
       el('path', { d: 'M ' + roomPolygon(o).map(p => ((o.x + p[0]) * S) + ' ' + ((o.y + p[1]) * S)).join(' L ') + ' Z', class: 'room', 'data-act': 'move', 'data-room': o.id }, g);
       if (pl) pl.placed.filter(q => q.cat !== 'uppers').forEach(q => el('rect', { x: (o.x + q.cx - q.hx) * S, y: (o.y + q.cz - q.hz) * S, width: q.hx * 2 * S, height: q.hz * 2 * S, rx: 6, class: 'furn' + (q.flat ? ' rug' : '') + (st.sel && st.sel.roomId === o.id && st.sel.cat === q.cat ? ' sel' : '') }, g));
       if (pl) {
-        const d = opening(o, pl.r, pl.r.door.wall, pl.r.door.t, 0.9), w = opening(o, pl.r, pl.r.win.wall, pl.r.win.t, 1.4);
+        const d = opening(o, pl.r, pl.r.door.wall, pl.r.door.t, pl.r.door.width + 0.04), w = opening(o, pl.r, pl.r.win.wall, pl.r.win.t, 1.4);
         el('line', { x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2, class: 'door' }, g);
+        doorSymbol(o, pl.r, g);
         el('line', { x1: w.x1, y1: w.y1, x2: w.x2, y2: w.y2, class: 'win' }, g);
         if (on) {
           el('circle', { cx: d.cx, cy: d.cy, r: 16, class: 'grip', 'data-act': 'door', 'data-room': o.id }, g);

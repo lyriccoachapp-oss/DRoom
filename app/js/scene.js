@@ -50,7 +50,8 @@ const Scene3D = (function () {
     };
     /* Openings sit on the room's sides; t on a side is shifted to t along this segment. */
     const ops = [];
-    if (seg.side && r.door.wall === seg.side) ops.push({ t0: r.door.t - seg.t0 - 0.45, t1: r.door.t - seg.t0 + 0.45, y0: 0, y1: 2.05, door: true });
+    const dw = r.door.width + 0.04;
+    if (seg.side && r.door.wall === seg.side) ops.push({ t0: r.door.t - seg.t0 - dw / 2, t1: r.door.t - seg.t0 + dw / 2, y0: 0, y1: 2.05, door: true });
     if (seg.side && r.win.wall === seg.side) { const w0 = r.win.t - seg.t0 - 0.7, w1 = w0 + 1.4; if (!(ops.length && w0 < ops[0].t1 && w1 > ops[0].t0)) ops.push({ t0: w0, t1: w1, y0: 0.9, y1: 2.2 }); }
     ops.forEach(op => { op.t0 = clamp(op.t0, 0, L); op.t1 = clamp(op.t1, 0, L); });
     ops.sort((a, b) => a.t0 - b.t0);
@@ -59,11 +60,25 @@ const Scene3D = (function () {
       if (op.t1 - op.t0 < 0.2) return;
       box(cur, op.t0, 0, H, wm); box(op.t0, op.t1, 0, op.y0, wm); box(op.t0, op.t1, op.y1, H, wm); cur = op.t1;
       if (op.door) {
-        const ang = 1.3, d = [dir[0] * Math.cos(ang) + n[0] * Math.sin(ang), dir[1] * Math.cos(ang) + n[1] * Math.sin(ang)];
-        const hinge = pt(op.t0), piv = new THREE.Group();
-        piv.position.set(hinge[0] + n[0] * WT, 0, hinge[1] + n[1] * WT); piv.rotation.y = Math.atan2(-d[1], d[0]);
-        const leaf = new THREE.Mesh(new THREE.BoxGeometry(0.86, 2.0, 0.04), M(shade(S.wood[1], -0.12), 0.7)); leaf.position.set(0.43, 1.0, 0); leaf.castShadow = true;
-        piv.add(leaf); g.add(piv);
+        const dr = r.door, lw = dr.width, wood = M(shade(S.wood[1], -0.12), 0.7), left = dr.side === 'left';
+        if (dr.type === 'swing') {
+          /* Hinge at the chosen end; the leaf stands open about 75 degrees into the room or out of it. */
+          const a = left ? dir : [-dir[0], -dir[1]], nn = dr.swing === 'in' ? n : [-n[0], -n[1]], ang = 1.3;
+          const d = [a[0] * Math.cos(ang) + nn[0] * Math.sin(ang), a[1] * Math.cos(ang) + nn[1] * Math.sin(ang)];
+          const hinge = pt(left ? op.t0 : op.t1), face = dr.swing === 'in' ? WT : 0, piv = new THREE.Group();
+          piv.position.set(hinge[0] + n[0] * face, 0, hinge[1] + n[1] * face); piv.rotation.y = Math.atan2(-d[1], d[0]);
+          const leaf = new THREE.Mesh(new THREE.BoxGeometry(lw - 0.02, 2.0, 0.04), wood); leaf.position.set((lw - 0.02) / 2, 1.0, 0); leaf.castShadow = true;
+          piv.add(leaf); g.add(piv);
+        } else if (dr.type === 'pocket') {
+          /* Most of the leaf is hidden inside the wall on its sliding side; a third shows in the opening. */
+          const sh = left ? -0.7 * lw : 0.7 * lw; box(op.t0 + sh, op.t1 + sh, 0, 2.02, wood, 0.034, WT / 2);
+        } else if (dr.type === 'barn') {
+          /* The leaf hangs on a rail on the room side of the wall, slid open beside the opening. */
+          const sh = left ? -(lw - 0.04) : lw - 0.04;
+          box(op.t0 + sh - 0.03, op.t1 + sh + 0.03, 0.02, 2.12, wood, 0.04, WT + 0.035);
+          const rail = left ? [op.t0 - lw - 0.08, op.t1 + 0.04] : [op.t0 - 0.04, op.t1 + lw + 0.08];
+          box(rail[0], rail[1], 2.16, 2.2, M(0x1c1c1e, 0.5, 0.5), 0.03, WT + 0.035);
+        }
       } else {
         box(op.t0, op.t1, op.y0, op.y1, new THREE.MeshStandardMaterial({ color: lin(0xcfe5f4), transparent: true, opacity: 0.45, roughness: 0.1 }), 0.012, WT / 2);
         box(op.t0, op.t1, op.y0, op.y0 + 0.04, white, WT + 0.02, WT / 2); box(op.t0, op.t1, op.y1 - 0.04, op.y1, white, WT + 0.02, WT / 2);
