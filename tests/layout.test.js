@@ -93,3 +93,42 @@ test('printed drawing scales are read from sheet text', () => {
   const r = run('__t.map(t => { const s = PlanRecognizer.scaleFromText(t); return s ? s.ratio : null; })');
   assert.strictEqual(Array.from(r).join(','), '64,48,50,100,,');
 });
+
+test('L-shaped rooms keep furniture out of the notch and count only the real floor area', () => {
+  let checked = 0;
+  for (const type of types) for (const corner of ['NE', 'NW', 'SE', 'SW']) for (const [W, D] of [[4, 4], [5.5, 4.2], [7, 5], [3, 6]]) for (const dw of walls) {
+    ctx.__room = { id: 'x', name: type, type, x: 0, y: 0, W, D, doorWall: dw, doorPos: 0.3, winWall: 'N', winPos: 0.6, overrides: {}, removed: [], cut: { corner, w: W * 0.4, d: D * 0.45 } };
+    const p = run('planRoom(__room, "scandi", 20000)'), c = p.r.cutBox;
+    assert.ok(c, `${type} ${corner} ${W}x${D}: notch kept`);
+    for (const q of p.placed) {
+      const inNotch = q.cx + q.hx > c.x0 + 1e-3 && q.cx - q.hx < c.x1 - 1e-3 && q.cz + q.hz > c.z0 + 1e-3 && q.cz - q.hz < c.z1 - 1e-3;
+      assert.ok(!inNotch, `${type} ${corner} ${W}x${D}: ${q.cat} is in the notch`);
+    }
+    assert.ok(Math.abs(p.r.area - (W * D - c.w * c.d)) < 1e-6);
+    const f = p.lines.find(l => l.area);
+    if (f) assert.ok(f.qty < W * D, `${type}: flooring excludes the notch`);
+    /* door and window sit on wall that exists */
+    for (const o of [p.r.door, p.r.win]) { const rg = run(`sideRange(__geo = roomGeom(__room), ${JSON.stringify(o.wall)})`); assert.ok(o.t >= rg[0] - 1e-6 && o.t <= rg[1] + 1e-6, `${type} ${corner}: opening off the wall`); }
+    /* six wall segments enclose the outline: their total length equals the perimeter */
+    const segs = run('wallSegments(__geo)'), per = segs.reduce((s, g) => s + Math.hypot(g.b[0] - g.a[0], g.b[1] - g.a[1]), 0);
+    assert.strictEqual(segs.length, 6);
+    assert.ok(Math.abs(per - 2 * (W + D)) < 1e-6, 'an L has the same perimeter as its bounding box');
+    if (W >= 5 && D >= 4.2 && type !== 'hall') for (const c2 of run(`ROOMS.${type}.required`)) assert.ok(p.placed.some(q => q.cat === c2) || run(`CATS.${c2}.area`), `${type} ${corner} ${W}x${D} door ${dw}: required ${c2} not placed`);
+    checked++;
+  }
+  assert.ok(checked > 300);
+});
+
+test('the plan detector recognizes an L-shaped room', () => {
+  const w = 300, h = 220, px = new Uint8ClampedArray(w * h * 4).fill(255);
+  const ink = (x0, y0, x1, y1) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const i = (y * w + x) * 4; px[i] = px[i + 1] = px[i + 2] = 0; } };
+  /* One L room: 240 x 180 box with the north-east 100 x 80 corner missing. */
+  ink(30, 20, 170, 22); ink(170, 20, 172, 100); ink(170, 98, 270, 100); ink(268, 98, 270, 200);
+  ink(30, 198, 270, 200); ink(30, 20, 32, 200);
+  ctx.__px = px;
+  const boxes = run('PlanRecognizer.detectPixels(__px, 300, 220)');
+  assert.strictEqual(boxes.length, 1);
+  const b = boxes[0];
+  assert.ok(b.cut && b.cut.corner === 'NE', 'notch found in the north-east corner');
+  assert.ok(Math.abs(b.cut.w - 98 / 240) < 0.08 && Math.abs(b.cut.h - 78 / 180) < 0.08, `notch size ${b.cut.w.toFixed(2)} x ${b.cut.h.toFixed(2)}`);
+});

@@ -12,15 +12,77 @@ function at(r,w,t,o,iw,id){
   return {cx:p[0]+n[0]*o,cz:p[1]+n[1]*o,hx:hz?iw/2:id/2,hz:hz?id/2:iw/2,rot:ROT[w],wall:w,t,o};
 }
 const overlap=(a,b,m)=>Math.abs(a.cx-b.cx)<a.hx+b.hx+(m||0)-1e-6&&Math.abs(a.cz-b.cz)<a.hz+b.hz+(m||0)-1e-6;
-const inRoom=(r,a)=>a.cx-a.hx>=-1e-3&&a.cz-a.hz>=-1e-3&&a.cx+a.hx<=r.W+1e-3&&a.cz+a.hz<=r.D+1e-3;
+const inRoom=(r,a)=>a.cx-a.hx>=-1e-3&&a.cz-a.hz>=-1e-3&&a.cx+a.hx<=r.W+1e-3&&a.cz+a.hz<=r.D+1e-3&&!(r.cutRect&&overlap(a,r.cutRect));
 
+/* L-shaped rooms: a room may have a rectangular notch cut from one corner, room.cut = {corner: 'NE'|'NW'|'SE'|'SW', w, d}.
+   cutOf() gives the notch in room coordinates, clamped so at least 1.2 m of room remains on each side. */
+function cutOf(room){
+  const c=room.cut;if(!c||!/^(N|S)(E|W)$/.test(c.corner))return null;
+  const w=clamp(c.w,0.5,room.W-1.2),d=clamp(c.d,0.5,room.D-1.2);if(!(w>0.49&&d>0.49))return null;
+  const east=c.corner[1]==='E',south=c.corner[0]==='S';
+  return {corner:c.corner,w,d,x0:east?room.W-w:0,x1:east?room.W:w,z0:south?room.D-d:0,z1:south?room.D:d};
+}
+const roomArea=room=>{const c=cutOf(room);return room.W*room.D-(c?c.w*c.d:0);};
+/* The room's outline, clockwise from the north-west corner, in room coordinates. */
+function roomPolygon(room){
+  const W=room.W,D=room.D,c=cutOf(room),p={NW:[[0,0]],NE:[[W,0]],SE:[[W,D]],SW:[[0,D]]};
+  if(c){
+    if(c.corner==='NW')p.NW=[[0,c.z1],[c.x1,c.z1],[c.x1,0]];
+    if(c.corner==='NE')p.NE=[[c.x0,0],[c.x0,c.z1],[W,c.z1]];
+    if(c.corner==='SE')p.SE=[[W,c.z0],[c.x0,c.z0],[c.x0,D]];
+    if(c.corner==='SW')p.SW=[[c.x1,D],[c.x1,c.z0],[0,c.z0]];
+  }
+  return p.NW.concat(p.NE,p.SE,p.SW);
+}
+/* The room as one or two axis-aligned rectangles in world coordinates {x0, z0, x1, z1}. */
+function roomRects(room){
+  const c=cutOf(room),X=room.x,Z=room.y;
+  if(!c)return [{x0:X,z0:Z,x1:X+room.W,z1:Z+room.D}];
+  const zr=c.z0===0?[c.z1,room.D]:[0,c.z0];
+  const a=c.x0===0?{x0:X+c.x1,x1:X+room.W}:{x0:X,x1:X+c.x0},b=c.x0===0?{x0:X,x1:X+c.x1}:{x0:X+c.x0,x1:X+room.W};
+  return [{x0:a.x0,x1:a.x1,z0:Z,z1:Z+room.D},{x0:b.x0,x1:b.x1,z0:Z+zr[0],z1:Z+zr[1]}];
+}
+/* The largest rectangles that fit inside the room, in room coordinates, biggest first. An L has two. */
+function maxRects(r){
+  const c=r.cutBox;if(!c)return [{x0:0,z0:0,x1:r.W,z1:r.D}];
+  return [{x0:c.x0===0?c.x1:0,x1:c.x0===0?r.W:c.x0,z0:0,z1:r.D},{x0:0,x1:r.W,z0:c.z0===0?c.z1:0,z1:c.z0===0?r.D:c.z0}]
+    .sort((a,b)=>(b.x1-b.x0)*(b.z1-b.z0)-(a.x1-a.x0)*(a.z1-a.z0));
+}
+/* Where each side of the room still has wall, as [t0, t1] along wallPoint's t. */
+function sideRange(r,w){
+  const len=wallLen(r,w),c=r.cutBox;if(!c)return [0,len];
+  if(w==='N'&&c.z0===0||w==='S'&&c.z1===r.D)return c.x0===0?[c.x1,len]:[0,c.x0];
+  if(w==='W'&&c.x0===0||w==='E'&&c.x1===r.W)return c.z0===0?[c.z1,len]:[0,c.z0];
+  return [0,len];
+}
+/* Wall segments for the 3D view: the four sides (shortened by a notch) plus the two notch walls.
+   Each has ends a, b, an inward normal n, the side it belongs to (null for notch walls) and t0, the side's t at a. */
+function wallSegments(r){
+  const segs=[];
+  for(const w in WALLS){const rg=sideRange(r,w);if(rg[1]-rg[0]<0.01)continue;segs.push({side:w,a:wallPoint(r,w,rg[0]),b:wallPoint(r,w,rg[1]),n:WALLS[w].n,t0:rg[0]});}
+  const c=r.cutBox;
+  if(c){
+    const zi=c.z0===0?c.z1:c.z0,xi=c.x0===0?c.x1:c.x0;
+    segs.push({side:null,a:[c.x0,zi],b:[c.x1,zi],n:[0,c.z0===0?1:-1],t0:0});
+    segs.push({side:null,a:[xi,c.z0],b:[xi,c.z1],n:[c.x0===0?1:-1,0],t0:0});
+  }
+  return segs;
+}
 
 /* Geometry of one room: door and window positions clamped to their walls, plus the zones they keep clear. */
 function roomGeom(room){
   const r={W:room.W,D:room.D};
-  const dl=wallLen(r,room.doorWall),wl=wallLen(r,room.winWall);
-  r.door={wall:room.doorWall,t:clamp(room.doorPos*dl,0.55,dl-0.55)};
-  r.win={wall:room.winWall,t:clamp(room.winPos*wl,0.8,wl-0.8)};
+  r.cutBox=cutOf(room);
+  r.cutRect=r.cutBox?{cx:(r.cutBox.x0+r.cutBox.x1)/2,cz:(r.cutBox.z0+r.cutBox.z1)/2,hx:r.cutBox.w/2,hz:r.cutBox.d/2}:null;
+  r.area=roomArea(room);
+  /* An opening goes on its chosen side where that side still has wall; a side too short for it hands it to the longest side. */
+  const place=(wall,pos,half)=>{
+    let rg=sideRange(r,wall);
+    if(rg[1]-rg[0]<half*2+0.1){wall=Object.keys(WALLS).sort((a,b)=>{const ra=sideRange(r,a),rb=sideRange(r,b);return (rb[1]-rb[0])-(ra[1]-ra[0]);})[0];rg=sideRange(r,wall);}
+    return {wall,t:clamp(pos*wallLen(r,wall),rg[0]+half,rg[1]-half)};
+  };
+  r.door=place(room.doorWall,room.doorPos,0.55);
+  r.win=place(room.winWall,room.winPos,0.8);
   r.doorRect=at(r,r.door.wall,r.door.t,0.5,1.0,1.0);
   r.winRect=at(r,r.win.wall,r.win.t,0.2,1.4,0.4);
   return r;
@@ -63,19 +125,25 @@ function runLayout(r,want,forced){
     }
   }
   const all=['W','E','N','S'];
+  const eff=w=>{const g=sideRange(r,w);return g[1]-g[0];},mid=w=>{const g=sideRange(r,w);return (g[0]+g[1])/2;};
 
   if(want.has('sofa')){ /* living room */
-    const score=w=>{let s=0;const a=acrossOf(r,w);if(r.win.wall===w)s-=3;if(r.door.wall===w)s-=2;if(r.door.wall===OPP[w])s-=1;if(wallLen(r,w)>=a)s+=1;if(a>=3&&a<=5.5)s+=1;return s;};
-    const tvWall=all.slice().sort((a,b)=>score(b)-score(a))[0],sw=OPP[tvWall];
-    const len=wallLen(r,sw),ac=acrossOf(r,sw);
-    let sofa=null;
-    for(const si of sizes('sofa')){const sz=dims('sofa',si);const rect=onWall(sw,sz[0],sz[1],sz[2],len/2,Math.max(0.04,ac-4.4));if(rect){sofa=add('sofa',si,rect);break;}}
-    if(want.has('tvstand'))for(const si of sizes('tvstand')){const sz=dims('tvstand',si);const rect=onWall(tvWall,sz[0],sz[1],sz[2],sofa?sofa.t:len/2,0.02);if(rect){add('tvstand',si,rect);break;}}
+    const score=w=>{let s=0;const a=acrossOf(r,w);if(r.win.wall===w)s-=3;if(r.door.wall===w)s-=2;if(r.door.wall===OPP[w])s-=1;if(eff(w)>=a)s+=1;if(a>=3&&a<=5.5)s+=1;if(eff(OPP[w])<1.7)s-=4;return s;};
+    /* The TV goes on the best-scoring wall whose opposite wall can take a sofa; an L-shaped room may rule out the first choice. */
+    const order=all.slice().sort((a,b)=>score(b)-score(a));
+    let tvWall=order[0],pick=null;
+    for(const tw of order){const s2=OPP[tw];
+      for(const si of sizes('sofa')){const sz=dims('sofa',si);const rect=onWall(s2,sz[0],sz[1],sz[2],mid(s2),Math.max(0.04,acrossOf(r,s2)-4.4));if(rect){pick={si,rect};break;}}
+      if(pick){tvWall=tw;break;}}
+    const sw=OPP[tvWall],len=wallLen(r,sw),ac=acrossOf(r,sw);
+    let sofa=pick?add('sofa',pick.si,pick.rect):null;
+    if(want.has('tvstand'))for(const si of sizes('tvstand')){const sz=dims('tvstand',si);const rect=onWall(tvWall,sz[0],sz[1],sz[2],sofa?sofa.t:mid(tvWall),0.02);if(rect){add('tvstand',si,rect);break;}}
     if(sofa){
       const front=sofa.gap+sofa.d; let coffee=null;
-      if(want.has('coffee')){const si=sizes('coffee')[0],sz=dims('coffee',si),o=front+0.4+sz[1]/2;
-        const rect=at(r,sw,sofa.t,o,sz[0],sz[1]);
-        if(ac-(o+sz[1]/2)-0.45>=0.5&&fits(rect,sz[2]))coffee=add('coffee',si,rect);}
+      /* Coffee table in front of the sofa: centred first, then nudged along the sofa or a little farther out to clear a door swing. */
+      if(want.has('coffee')){const si=sizes('coffee')[0],sz=dims('coffee',si);
+        search:for(const dO of [0.4,0.5,0.6])for(const dt of [0,-0.15,0.15,-0.3,0.3]){const o=front+dO+sz[1]/2,rect=at(r,sw,sofa.t+dt,o,sz[0],sz[1]);
+          if(ac-(o+sz[1]/2)-0.45>=0.5&&fits(rect,sz[2])){coffee=add('coffee',si,rect);break search;}}}
       if(want.has('rug')){const space=ac-front-0.45;
         for(const si of sizes('rug')){const sz=dims('rug',si);
           if(sz[0]<=len-0.3&&sz[1]<=space+0.3){const t=clamp(sofa.t,sz[0]/2+0.1,len-sz[0]/2-0.1);
@@ -93,12 +161,13 @@ function runLayout(r,want,forced){
     corner('plant',0.5,true);
   }
   if(want.has('bed')){ /* bedroom */
-    const score=w=>{let s=0;if(r.win.wall===w)s-=3;if(r.door.wall===w)s-=3;if(wallLen(r,w)>=3)s+=1;if(acrossOf(r,w)>=2.9)s+=2;return s;};
-    const hw=all.slice().sort((a,b)=>score(b)-score(a))[0],len=wallLen(r,hw),ac=acrossOf(r,hw);
-    let bed=null;
-    for(const pass of [1.1,0]){if(bed)break;
-      for(const si of sizes('bed')){const sz=dims('bed',si);if(len<sz[0]+pass)continue;
-        const rect=onWall(hw,sz[0],sz[1],sz[2],len/2,0.02);if(rect){bed=add('bed',si,rect);break;}}}
+    const score=w=>{let s=0;if(r.win.wall===w)s-=3;if(r.door.wall===w)s-=3;if(eff(w)>=3)s+=1;if(acrossOf(r,w)>=2.9)s+=2;return s;};
+    const order=all.slice().sort((a,b)=>score(b)-score(a));
+    let hw=order[0],bed=null;
+    /* First pass leaves room to walk past the bed; the head wall is the best-scoring one that takes it. */
+    outer:for(const pass of [1.1,0])for(const w2 of order)for(const si of sizes('bed')){const sz=dims('bed',si);if(eff(w2)<sz[0]+pass)continue;
+      const rect=onWall(w2,sz[0],sz[1],sz[2],mid(w2),0.02);if(rect){hw=w2;bed=add('bed',si,rect);break outer;}}
+    const len=wallLen(r,hw),ac=acrossOf(r,hw);
     if(bed){
       if(want.has('nightstand')){const si=sizes('nightstand')[0],sz=dims('nightstand',si);
         for(const sg of [-1,1]){const rect=at(r,hw,bed.t+sg*(bed.w/2+0.06+sz[0]/2),0.02+sz[1]/2,sz[0],sz[1]);if(fits(rect,sz[2]))add('nightstand',si,rect);}}
@@ -114,15 +183,17 @@ function runLayout(r,want,forced){
     corner('plant',0.5,true);
   }
   if(want.has('dtable')){ /* dining room: table in the middle, chairs along its long sides */
-    const bw=r.W>=r.D?'N':'W',L=wallLen(r,bw),A=acrossOf(r,bw);
-    let tb=null;
-    for(const si of sizes('dtable')){const sz=dims('dtable',si);if(L<sz[0]+1.5||A<sz[1]+1.9)continue;
-      const rect=at(r,bw,L/2,A/2,sz[0],sz[1]);if(fits(rect,sz[2])){tb=add('dtable',si,rect);break;}}
+    /* The table is centred in the largest rectangle of the room (for an L, one of its two arms), long side along its long side. */
+    let tb=null,bw='N',tc=0,oc=0,L=0,A=0;
+    table:for(const q of maxRects(r)){const wq=q.x1-q.x0,dq=q.z1-q.z0;bw=wq>=dq?'N':'W';L=Math.max(wq,dq);A=Math.min(wq,dq);
+      tc=bw==='N'?(q.x0+q.x1)/2:(q.z0+q.z1)/2;oc=bw==='N'?(q.z0+q.z1)/2:(q.x0+q.x1)/2;
+      for(const si of sizes('dtable')){const sz=dims('dtable',si);if(L<sz[0]+1.5||A<sz[1]+1.9)continue;
+        const rect=at(r,bw,tc,oc,sz[0],sz[1]);if(fits(rect,sz[2])){tb=add('dtable',si,rect);break table;}}}
     if(tb){
-      if(want.has('rug'))for(const si of sizes('rug')){const sz=dims('rug',si);if(sz[0]<=L-0.3&&sz[1]<=A-0.3&&sz[0]>=tb.w){add('rug',si,at(r,bw,L/2,A/2,sz[0],sz[1]),{flat:true});break;}}
+      if(want.has('rug'))for(const si of sizes('rug')){const sz=dims('rug',si),rr=at(r,bw,tc,oc,sz[0],sz[1]);if(sz[0]<=L-0.3&&sz[1]<=A-0.3&&sz[0]>=tb.w&&inRoom(r,rr)){add('rug',si,rr,{flat:true});break;}}
       if(want.has('dchair')){const si=sizes('dchair')[0],sz=dims('dchair',si),n=Math.max(2,Math.floor(tb.w/0.55)),off=tb.d/2+0.06+sz[1]/2;
-        for(let i=0;i<n;i++){const t=L/2-tb.w/2+tb.w*(i+0.5)/n;
-          [[A/2-off,ROT[bw]],[A/2+off,ROT[OPP[bw]]]].forEach(v=>{const rect=at(r,bw,t,v[0],sz[0],sz[1]);rect.rot=v[1];if(fits(rect,0.5))add('dchair',si,rect);});}}
+        for(let i=0;i<n;i++){const t=tc-tb.w/2+tb.w*(i+0.5)/n;
+          [[oc-off,ROT[bw]],[oc+off,ROT[OPP[bw]]]].forEach(v=>{const rect=at(r,bw,t,v[0],sz[0],sz[1]);rect.rot=v[1];if(fits(rect,0.5))add('dchair',si,rect);});}}
     }
     byWalls('sideboard',all,0.5);
     corner('lamp',0.5,false);corner('plant',0.5,true);
@@ -139,18 +210,19 @@ function runLayout(r,want,forced){
     corner('lamp',0.5,false);corner('plant',0.5,true);
   }
   if(want.has('cabrun')){ /* kitchen: fridge, cabinet run and range in a line along one wall */
-    const score=w=>{let s=wallLen(r,w)/10;if(r.win.wall!==w)s+=2;if(r.door.wall!==w)s+=2;return s;};
-    const kw=all.slice().sort((a,b)=>score(b)-score(a))[0],len=wallLen(r,kw),far=doorT(kw);
-    const pos=s=>far===0?s:len-s;
-    let cur=0.05;
+    const score=w=>{let s=eff(w)/10;if(r.win.wall!==w)s+=2;if(r.door.wall!==w)s+=2;return s;};
+    const kw=all.slice().sort((a,b)=>score(b)-score(a))[0],len=wallLen(r,kw),far=doorT(kw),kr=sideRange(r,kw);
+    /* s runs along the wall from the end farther from the door, over the part of the wall that exists. */
+    const pos=s=>far===0?s:len-s,s0=far===0?kr[0]:len-kr[1],s1=far===0?kr[1]:len-kr[0];
+    let cur=s0+0.05;
     const put=(cat,si)=>{const sz=dims(cat,si);
-      for(let sh=0;sh<=1.2;sh+=0.1){const c=cur+sh;if(c+sz[0]>len-0.04)break;
+      for(let sh=0;sh<=1.2;sh+=0.1){const c=cur+sh;if(c+sz[0]>s1-0.04)break;
         const rect=at(r,kw,pos(c+sz[0]/2),0.02+sz[1]/2,sz[0],sz[1]);
-        if(fits(rect,sz[2])){rect.gap=0.02;cur=c+sz[0]+0.02;return add(cat,si,rect);}}
+        if(fits(rect,sz[2])){rect.gap=0.02;cur=c+sz[0]+0.05;return add(cat,si,rect);}}
       return null;};
-    const rangeW=want.has('range')?dims('range',0)[0]+0.02:0;
+    const rangeW=want.has('range')?dims('range',0)[0]+0.05:0;
     let run=null;
-    for(const si of sizes('cabrun')){if(cur+dims('cabrun',si)[0]+rangeW>len-0.04)continue;run=put('cabrun',si);if(run)break;}
+    for(const si of sizes('cabrun')){if(cur+dims('cabrun',si)[0]+rangeW>s1-0.04)continue;run=put('cabrun',si);if(run)break;}
     if(want.has('range'))put('range',sizes('range')[0]);
     if(want.has('fridge')&&!put('fridge',sizes('fridge')[0]))byWalls('fridge',all.filter(w=>w!==kw),0.6);
     if(run&&want.has('uppers')&&(forced.uppers==null||forced.uppers===run.si)){
@@ -183,7 +255,7 @@ function planRoom(room,style,budget,notes){
   for(const c in forced){if(want.has(c)&&!placed.some(p=>p.cat===c)){
     notes.push(BYID[room.overrides[c]].name+' does not fit in '+room.name+'. A different size was chosen.');
     delete room.overrides[c];return planRoom(room,style,budget,notes);}}
-  const area=Math.ceil(r.W*r.D*1.1*10)/10;
+  const area=Math.ceil(r.area*1.1*10)/10;
   const has=c=>CATS[c].area||placed.some(p=>p.cat===c);
   const excluded=[];
   spec.all.forEach(c=>{if(room.removed.includes(c))excluded.push({cat:c,reason:'removed'});else if(!has(c)&&!(c==='shower'&&has('tub')))excluded.push({cat:c,reason:'space'});});

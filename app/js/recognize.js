@@ -69,6 +69,25 @@ const PlanRecognizer = (function () {
       close(a1 + 1);
       return { gap: best ? { len: best.len, pos: (best.mid - (a0 - r)) / (a1 - a0 + 1 + 2 * r) } : null, ext: ext / cnt > 0.6 };
     }
+    /* L-shaped rooms: an empty rectangle in one corner of the room's bounding box. */
+    function notch(b, id) {
+      const bw = b.x1 - b.x0 + 1, bh = b.y1 - b.y0 + 1, band = Math.max(2, Math.round(Math.min(bw, bh) * 0.04));
+      const has = (x0, y0, x1, y1) => { let c = 0; for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (lab[y * w + x] === id) c++; return c; };
+      let best = null;
+      for (const corner of ['NE', 'NW', 'SE', 'SW']) {
+        const east = corner[1] === 'E', south = corner[0] === 'S';
+        const rowY = south ? [b.y1 - band, b.y1] : [b.y0, b.y0 + band], colX = east ? [b.x1 - band, b.x1] : [b.x0, b.x0 + band];
+        /* Along the band of rows at that end, how far in from the corner side the room starts; the same for columns. */
+        let cw = 0; for (let k = 0; k < bw; k++) { const x = east ? b.x1 - k : b.x0 + k; if (has(x, rowY[0], x, rowY[1])) break; cw++; }
+        let cd = 0; for (let k = 0; k < bh; k++) { const y = south ? b.y1 - k : b.y0 + k; if (has(colX[0], y, colX[1], y)) break; cd++; }
+        if (cw < bw * 0.18 || cd < bh * 0.18 || cw > bw * 0.85 || cd > bh * 0.85) continue;
+        const nx0 = east ? b.x1 - cw + 1 : b.x0, nx1 = east ? b.x1 : b.x0 + cw - 1, ny0 = south ? b.y1 - cd + 1 : b.y0, ny1 = south ? b.y1 : b.y0 + cd - 1;
+        if (has(nx0, ny0, nx1, ny1) > cw * cd * 0.04) continue;
+        if (!best || cw * cd > best.cw * best.cd) best = { corner, cw, cd };
+      }
+      return best;
+    }
+    out.forEach((b, k) => { b.notch = notch(b, k + 1); });
     out.forEach(b => {
       b.ext = {}; let door = null;
       ['N', 'S', 'W', 'E'].forEach(nm => { const sd = side(b, nm); b.ext[nm] = sd.ext; if (sd.gap && (!door || sd.gap.len > door.len)) door = { wall: nm, pos: Math.max(0, Math.min(1, sd.gap.pos)), len: sd.gap.len }; });
@@ -77,9 +96,11 @@ const PlanRecognizer = (function () {
     return out.map(b => {
       const bw = b.x1 - b.x0 + 1, bh = b.y1 - b.y0 + 1;
       const X0 = Math.max(0, b.x0 - r), Y0 = Math.max(0, b.y0 - r), X1 = Math.min(w, b.x1 + 1 + r), Y1 = Math.min(h, b.y1 + 1 + r);
-      return { x: X0 / w, y: Y0 / h, w: (X1 - X0) / w, h: (Y1 - Y0) / h, fill: b.area / (bw * bh), px: (X1 - X0) * (Y1 - Y0), door: b.door, ext: b.ext };
-    }).filter(b => b.fill >= 0.5 && b.px >= n * 0.008 && b.w < 0.97 && b.h < 0.97)
-      .sort((a, b) => b.px - a.px).slice(0, 16).map(b => ({ x: b.x, y: b.y, w: b.w, h: b.h, door: b.door, ext: b.ext }));
+      /* Free space is inset by the same wall allowance on the notch walls as on the outer walls, so the notch measured in it is already wall-centre to wall-centre. */
+      const cut = b.notch ? { corner: b.notch.corner, w: b.notch.cw / (X1 - X0), h: b.notch.cd / (Y1 - Y0) } : null;
+      return { x: X0 / w, y: Y0 / h, w: (X1 - X0) / w, h: (Y1 - Y0) / h, fill: b.area / (bw * bh), px: (X1 - X0) * (Y1 - Y0), door: b.door, ext: b.ext, cut };
+    }).filter(b => b.fill >= (b.cut ? 0.4 : 0.5) && b.px >= n * 0.008 && b.w < 0.97 && b.h < 0.97)
+      .sort((a, b) => b.px - a.px).slice(0, 16).map(b => ({ x: b.x, y: b.y, w: b.w, h: b.h, door: b.door, ext: b.ext, cut: b.cut }));
   }
 
   /* Room types from size alone, for when no AI is available. `rooms` are in metres: {W, D}. */
@@ -113,7 +134,7 @@ const PlanRecognizer = (function () {
         const b = e.i != null && boxes[e.i - 1] ? boxes[e.i - 1] : e;
         const x = Number(b.x), y = Number(b.y), w = Number(b.w), h = Number(b.h);
         if (![x, y, w, h].every(isFinite) || w <= 0.01 || h <= 0.01 || x < -0.05 || y < -0.05 || x + w > 1.05 || y + h > 1.05) return;
-        rooms.push({ type: e.type, name: String(e.name || '').slice(0, 24), x, y, w, h, door: b.door || null, ext: b.ext || null });
+        rooms.push({ type: e.type, name: String(e.name || '').slice(0, 24), x, y, w, h, door: b.door || null, ext: b.ext || null, cut: e.i != null ? (b.cut || null) : null });
       });
       const wm = Number(res && res.width_m);
       return { width_m: isFinite(wm) && wm >= 3 && wm <= 80 ? wm : null, rooms };
