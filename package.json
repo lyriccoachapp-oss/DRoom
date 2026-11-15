@@ -1,0 +1,11 @@
+{
+  "name": "droom",
+  "private": true,
+  "version": "0.1.0",
+  "description": "3D home planner that furnishes a floor plan from real catalogs and returns a shopping list",
+  "scripts": {
+    "test": "node --test tests/*.test.js",
+    "build": "node scripts/build.js",
+    "serve": "node scripts/build.js && node scripts/serve.js"
+  }
+}
