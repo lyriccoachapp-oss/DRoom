@@ -5,7 +5,8 @@
 const PlanRecognizer = (function () {
   const TYPES = ['living', 'bedroom', 'kitchen', 'bathroom', 'dining', 'office', 'hall'];
 
-  /* Returns [{x, y, w, h}] as fractions of the image width and height, largest first. */
+  /* Returns [{x, y, w, h, door, ext}] largest first. x, y, w, h are fractions of the image width and height;
+     door is {wall, pos} or null; ext says which of the N, S, W, E sides are outside walls. */
   function detect(img) {
     const max = 480, k = Math.min(1, max / Math.max(img.width, img.height));
     const w = Math.max(8, Math.round(img.width * k)), h = Math.max(8, Math.round(img.height * k)), n = w * h;
@@ -49,12 +50,36 @@ const PlanRecognizer = (function () {
       push(i); fill((px, py) => { area++; if (px < x0) x0 = px; if (px > x1) x1 = px; if (py < y0) y0 = py; if (py > y1) y1 = py; });
       out.push({ x0, y0, x1, y1, area });
     }
+    /* Doors and outside walls. Along each side of a room, look at the strip where the wall ink should be:
+       a clean break of door-like length is a doorway, and a side with open sheet beyond it is an outside wall. */
+    const maxSide = Math.max(w, h), minL = Math.max(4, Math.round(maxSide * 0.025)), maxL = Math.round(maxSide * 0.14);
+    function side(b, name) {
+      const horiz = name === 'N' || name === 'S', a0 = horiz ? b.x0 : b.y0, a1 = horiz ? b.x1 : b.y1;
+      const edge = name === 'N' ? b.y0 : name === 'S' ? b.y1 : name === 'W' ? b.x0 : b.x1, dir = (name === 'N' || name === 'W') ? -1 : 1;
+      const at = (t, k) => { const q = edge + dir * k, x = horiz ? t : q, y = horiz ? q : t; return (x < 0 || y < 0 || x >= w || y >= h) ? -2 : y * w + x; };
+      let run = 0, best = null, ext = 0, cnt = 0;
+      const close = end => { if (run >= minL && run <= maxL && (!best || run > best.len)) best = { len: run, mid: end - run / 2 }; run = 0; };
+      for (let t = a0; t <= a1; t++) {
+        let ink = false;
+        for (let k = r - 1; k <= 2 * r + 2 && !ink; k++) { const i = at(t, k); if (i === -2 || wall[i]) ink = true; }
+        if (ink) close(t); else run++;
+        const i1 = at(t, 3 * r + 3), i2 = at(t, 4 * r + 3); cnt++;
+        if (i1 === -2 || i2 === -2 || lab[i1] === -1 || lab[i2] === -1) ext++;
+      }
+      close(a1 + 1);
+      return { gap: best ? { len: best.len, pos: (best.mid - (a0 - r)) / (a1 - a0 + 1 + 2 * r) } : null, ext: ext / cnt > 0.6 };
+    }
+    out.forEach(b => {
+      b.ext = {}; let door = null;
+      ['N', 'S', 'W', 'E'].forEach(nm => { const sd = side(b, nm); b.ext[nm] = sd.ext; if (sd.gap && (!door || sd.gap.len > door.len)) door = { wall: nm, pos: Math.max(0, Math.min(1, sd.gap.pos)), len: sd.gap.len }; });
+      b.door = door ? { wall: door.wall, pos: door.pos } : null;
+    });
     return out.map(b => {
       const bw = b.x1 - b.x0 + 1, bh = b.y1 - b.y0 + 1;
       const X0 = Math.max(0, b.x0 - r), Y0 = Math.max(0, b.y0 - r), X1 = Math.min(w, b.x1 + 1 + r), Y1 = Math.min(h, b.y1 + 1 + r);
-      return { x: X0 / w, y: Y0 / h, w: (X1 - X0) / w, h: (Y1 - Y0) / h, fill: b.area / (bw * bh), px: (X1 - X0) * (Y1 - Y0) };
+      return { x: X0 / w, y: Y0 / h, w: (X1 - X0) / w, h: (Y1 - Y0) / h, fill: b.area / (bw * bh), px: (X1 - X0) * (Y1 - Y0), door: b.door, ext: b.ext };
     }).filter(b => b.fill >= 0.5 && b.px >= n * 0.008 && b.w < 0.97 && b.h < 0.97)
-      .sort((a, b) => b.px - a.px).slice(0, 16).map(b => ({ x: b.x, y: b.y, w: b.w, h: b.h }));
+      .sort((a, b) => b.px - a.px).slice(0, 16).map(b => ({ x: b.x, y: b.y, w: b.w, h: b.h, door: b.door, ext: b.ext }));
   }
 
   /* Room types from size alone, for when no AI is available. `rooms` are in metres: {W, D}. */
@@ -88,7 +113,7 @@ const PlanRecognizer = (function () {
         const b = e.i != null && boxes[e.i - 1] ? boxes[e.i - 1] : e;
         const x = Number(b.x), y = Number(b.y), w = Number(b.w), h = Number(b.h);
         if (![x, y, w, h].every(isFinite) || w <= 0.01 || h <= 0.01 || x < -0.05 || y < -0.05 || x + w > 1.05 || y + h > 1.05) return;
-        rooms.push({ type: e.type, name: String(e.name || '').slice(0, 24), x, y, w, h });
+        rooms.push({ type: e.type, name: String(e.name || '').slice(0, 24), x, y, w, h, door: b.door || null, ext: b.ext || null });
       });
       const wm = Number(res && res.width_m);
       return { width_m: isFinite(wm) && wm >= 3 && wm <= 80 ? wm : null, rooms };
