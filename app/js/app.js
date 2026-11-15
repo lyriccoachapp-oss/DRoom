@@ -9,9 +9,15 @@
     return { id: newId(), name: ROOMS[type].name, type, x, y, W, D, doorWall: 'S', doorPos: 0.82, winWall: 'N', winPos: 0.5, overrides: {}, removed: [] };
   }
   function defaults() {
-    const a = makeRoom('living', 0, 0, 5.4, 4.2), b = makeRoom('bedroom', 5.4, 0, 4.0, 3.6), k = makeRoom('kitchen', 0, 4.2, 3.8, 3.2), t = makeRoom('bathroom', 5.4, 3.6, 2.4, 2.2);
-    b.doorPos = 0.2; k.doorWall = 'N'; k.winWall = 'S'; t.doorWall = 'W'; t.doorPos = 0.7; t.winWall = 'E';
-    return { style: 'scandi', budget: 20000, units: 'ft', rooms: [a, b, k, t], roomId: a.id, view: 'plan' };
+    /* Sample home: every room opens onto the hallway or the living room, so all of it can be walked. */
+    const a = makeRoom('living', 0, 0, 5.4, 4.2), h = makeRoom('hall', 5.4, 0, 1.4, 5.8), b = makeRoom('bedroom', 6.8, 0, 4.0, 3.6),
+      t = makeRoom('bathroom', 6.8, 3.6, 2.4, 2.2), k = makeRoom('kitchen', 0, 4.2, 3.8, 3.2);
+    a.doorWall = 'E'; a.doorPos = 0.7; a.winWall = 'N';
+    h.doorWall = 'S'; h.doorPos = 0.5; h.winWall = 'N';
+    b.doorWall = 'W'; b.doorPos = 0.5; b.winWall = 'N';
+    t.doorWall = 'W'; t.doorPos = 0.5; t.winWall = 'E';
+    k.doorWall = 'N'; k.doorPos = 0.82; k.winWall = 'S';
+    return { style: 'scandi', budget: 20000, units: 'ft', rooms: [a, h, b, t, k], roomId: a.id, view: 'plan' };
   }
   function load() {
     try {
@@ -91,15 +97,19 @@
     const area = state.rooms.reduce((s, x) => s + roomArea(x), 0);
     $('#homeDims').textContent = state.rooms.length + (state.rooms.length === 1 ? ' room · ' : ' rooms · ') + fmtArea(area);
     $('#hint').textContent = state.view === 'plan' ? 'Drag rooms, corners and markers to edit the plan'
-      : state.view === 'walk' ? 'Drag to look around · W A S D or arrows to walk'
-      : 'Drag to rotate · scroll to zoom · tap furniture to swap it';
-    $('#walkpad').hidden = state.view !== 'walk';
+      : state.view === 'walk' ? 'Click floor to walk · double-click furniture · drag to look · wheel to step'
+      : 'Drag to rotate · scroll to zoom · double-click furniture to swap it';
+    $('#walkpad').hidden = state.view !== 'walk' || !has3d;
+    $('#mini').toggleAttribute('hidden', state.view !== 'walk' || !has3d);
+    const wr = $('#walkRooms'); wr.hidden = state.view !== 'walk' || !has3d || state.rooms.length < 2; wr.textContent = '';
+    if (!wr.hidden) state.rooms.forEach(r => { const b = el('button', '', r.name); b.type = 'button'; b.dataset.id = r.id; b.setAttribute('aria-pressed', r.id === state.roomId ? 'true' : 'false'); b.addEventListener('click', () => { state.roomId = r.id; Scene3D.goRoom(r.id); renderSide(); }); wr.appendChild(b); });
     $('#plan').style.display = state.view === 'plan' ? '' : 'none';
     $('#cv').hidden = state.view === 'plan' || !has3d;
     $('#fail').hidden = state.view === 'plan' || has3d;
   }
   const REASON = { budget: 'over budget', space: 'does not fit', removed: 'removed by you' };
   function renderList() {
+    renderCard();
     const total = plans.reduce((s, p) => s + p.total, 0), over = total > state.budget;
     $('#sumTotal').textContent = money(total); $('#sumOf').textContent = 'of ' + money(state.budget);
     $('#bar').classList.toggle('over', over); $('#barFill').style.width = clamp(total / state.budget * 100, 0, 100) + '%';
@@ -162,11 +172,29 @@
     body.appendChild(alts);
     return body;
   }
-  function select(s, scroll) {
+  /* A pick in the 3D view opens a card over the view, so nobody has to scroll away from the walk to swap a piece. */
+  let cardOpen = false;
+  function select(s, from3d) {
     sel = s; if (s) state.roomId = s.roomId;
+    cardOpen = !!(s && from3d && state.view !== 'plan');
     renderSide(); renderList(); PlanEditor.render(); Scene3D.setSelected(sel);
-    if (scroll && s) { const n = document.querySelector('.item.sel'); if (n && n.scrollIntoView) n.scrollIntoView({ block: 'nearest' }); }
   }
+  function renderCard() {
+    const card = $('#itemCard'), p = sel && planOf(sel.roomId), l = p && p.lines.find(x => x.cat === sel.cat);
+    card.hidden = !(cardOpen && l && state.view !== 'plan');
+    if (card.hidden) return;
+    const it = l.item;
+    $('#icName').textContent = it.name + (l.area ? ', ' + fmtArea(l.qty) : l.qty > 1 ? ' \u00d7 ' + l.qty : '');
+    $('#icMeta').textContent = p.room.name + ' \u00b7 ' + fmtDims(it);
+    $('#icPrice').textContent = money(it.price * l.qty);
+    $('#icClose').textContent = state.view === 'walk' ? 'Back to walking' : 'Close';
+    const body = $('#icBody'); body.textContent = ''; body.appendChild(altsFor(p, l));
+    /* The card lists only what fits this room; the full list with sizes that do not fit stays in the shopping list. */
+    body.querySelectorAll('.alt:disabled').forEach(n => n.remove());
+  }
+  function closeCard() { cardOpen = false; select(null); }
+  $('#icClose').addEventListener('click', closeCard);
+  window.addEventListener('keydown', e => { if (e.key === 'Escape' && cardOpen) closeCard(); });
   function syncScene() {
     if (state.view === 'plan') { sceneStale = true; return; }
     Scene3D.build(plans, state.style); Scene3D.setSelected(sel); sceneStale = false;
@@ -183,10 +211,15 @@
   $('#selType').addEventListener('change', e => { const v = e.target.value, r = room(); if (!r || r.type === v) return; if (r.name === ROOMS[r.type].name) r.name = ROOMS[v].name; r.type = v; r.overrides = {}; r.removed = []; sel = null; update(); });
   seg('#segView', v => {
     const fromPlan = state.view === 'plan';
-    state.view = v; save(); renderSide();
+    if (state.view === 'walk' && has3d) state.walk = Scene3D.pose();
+    state.view = v; if (v === 'plan') cardOpen = false; save(); renderSide(); renderList();
     if (v !== 'plan' && fromPlan) Scene3D.regrow();
-    if (v !== 'plan') { if (sceneStale) syncScene(); Scene3D.setView(v, planOf(state.roomId) || plans[0]); Scene3D.resize(); }
+    if (v !== 'plan') { if (sceneStale) syncScene(); Scene3D.setView(v, planOf(state.roomId) || plans[0], v === 'walk' ? state.walk : null); Scene3D.resize(); }
   });
+  /* The walk position is kept with the project, so the Walk tab (or a reload) returns to the same spot and view. */
+  const keepPose = () => { if (state.view === 'walk' && has3d) { state.walk = Scene3D.pose(); save(); } };
+  window.addEventListener('pagehide', keepPose);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) keepPose(); });
   $('#inBudget').addEventListener('input', e => { state.budget = parseInt(e.target.value, 10); update(); });
   $('#inName').addEventListener('input', e => { const r = room(); if (r) { r.name = e.target.value.trim() || ROOMS[r.type].name; update(); } });
   $('#selDoor').addEventListener('change', e => { const r = room(); if (r) { r.doorType = e.target.value; update(); } });
@@ -222,10 +255,11 @@
     const b = $('#btnCopy'), done = ok => { b.textContent = ok ? 'Copied' : 'Copy failed'; setTimeout(() => b.textContent = 'Copy list', 1600); };
     try { navigator.clipboard.writeText(lines.join('\n')).then(() => done(true), () => done(false)); } catch (e) { done(false); }
   });
-  [['#padF', 'padF'], ['#padB', 'padB']].forEach(a => {
-    const b = $(a[0]);
-    b.addEventListener('pointerdown', e => { e.preventDefault(); Scene3D.hold(a[1], true); });
-    ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, () => Scene3D.hold(a[1], false)));
+  [['#padF', 'padF'], ['#padB', 'padB'], ['#padL', 'padL'], ['#padR', 'padR']].forEach(a => {
+    const b = $(a[0]), off = () => { Scene3D.hold(a[1], false); b.classList.remove('on'); };
+    b.addEventListener('pointerdown', e => { e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch (err) {} Scene3D.hold(a[1], true); b.classList.add('on'); });
+    ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => b.addEventListener(ev, off));
+    b.addEventListener('contextmenu', e => e.preventDefault());
   });
 
   /* ---------- boot ---------- */
@@ -365,7 +399,9 @@
   $('#btnCalOk').addEventListener('click', applyCal);
   $('#inCal').addEventListener('keydown', e => { if (e.key === 'Enter') applyCal(); });
   $('#btnTraceOff').addEventListener('click', () => { say(''); $('#calRow').hidden = true; PlanEditor.endCalibrate(); trace = null; $('#inTrace').value = ''; PlanEditor.refit(); traceUi(); PlanEditor.render(); });
-  has3d = Scene3D.init($('#cv'), $('#stage'), s => select(s, true));
+  has3d = Scene3D.init($('#cv'), $('#stage'), s => select(s, true), $('#mini'));
+  /* While walking, the room chips show the room you are standing in. */
+  $('#cv').addEventListener('roomchange', e => { document.querySelectorAll('#walkRooms button').forEach(b => b.setAttribute('aria-pressed', b.dataset.id === e.detail ? 'true' : 'false')); });
   update(true); hist.push(snapshot()); hi = 0; histButtons();
-  if (state.view !== 'plan') { Scene3D.setView(state.view, planOf(state.roomId) || plans[0]); Scene3D.resize(); }
+  if (state.view !== 'plan') { Scene3D.setView(state.view, planOf(state.roomId) || plans[0], state.walk); Scene3D.resize(); }
 })();
