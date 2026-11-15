@@ -47,7 +47,7 @@ h3{font-weight:700; font-size:17px; letter-spacing:-.01em}
 .assure{display:flex; gap:12px; align-items:center; padding-left:22px; border-left:1px solid var(--night-line); max-width:270px; font-size:14px; color:var(--on-night-muted)}
 .assure strong{display:block; color:var(--on-night); font-size:15px}
 .frame{position:relative; border:1px solid rgba(240,160,124,.45); border-radius:22px; padding:10px; background:var(--night-2); box-shadow:0 0 60px rgba(232,105,58,.18)}
-.frame .img{border-radius:14px; overflow:hidden; aspect-ratio:16/11; background:#141B24}
+.frame .img{border-radius:14px; overflow:hidden; aspect-ratio:16/11; background:#0B1016}
 .frame img{width:100%; height:100%; object-fit:cover; display:block; transform:scale(1.32)}
 .float{position:absolute; display:inline-flex; align-items:center; gap:7px; background:rgba(16,21,28,.86); border:1px solid var(--night-line); color:var(--on-night); font-weight:600; font-size:12.5px; padding:6px 11px; border-radius:999px}
 .float i{width:7px; height:7px; border-radius:50%; background:var(--sun)}
@@ -89,7 +89,7 @@ section{padding-block:76px}
 .center p b{color:var(--ink)}
 .dark .center p{color:var(--on-night-muted)}
 .pain{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:36px; align-items:stretch}
-.pain .img{border-radius:18px; overflow:hidden; background:#141B24; min-height:300px}
+.pain .img{border-radius:18px; overflow:hidden; background:#0B1016; min-height:300px}
 .pain .img img{width:100%; height:100%; object-fit:cover; display:block; transform:scale(1.25)}
 .cards{background:var(--paper); border:1px solid var(--paper-line); border-radius:18px; overflow:hidden; display:flex; flex-direction:column}
 .cards div{display:grid; grid-template-columns:44px minmax(0,1fr); gap:6px 10px; padding:20px 22px; border-bottom:1px solid var(--paper-line)}
@@ -110,7 +110,7 @@ section{padding-block:76px}
 .dark .chips{justify-content:center; padding-block:0 30px}
 .shots{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px}
 .shots figure{margin:0; display:flex; flex-direction:column; gap:10px; min-width:0}
-.shots .img{border:1px solid rgba(240,160,124,.35); border-radius:16px; overflow:hidden; aspect-ratio:4/3; background:#141B24}
+.shots .img{border:1px solid rgba(240,160,124,.35); border-radius:16px; overflow:hidden; aspect-ratio:4/3; background:#0B1016}
 .shots img{width:100%; height:100%; object-fit:cover; display:block; transform:scale(1.2)}
 .shots figcaption{font-size:14.5px; color:var(--on-night-muted); text-align:center}
 .disclose{text-align:center; font-size:14px; color:var(--on-night-muted); padding-top:26px}
@@ -166,17 +166,16 @@ footer{background:var(--night); border-top:1px solid var(--night-line); color:va
     </div>
     <div class="col">
       <div class="frame">
-        <div class="img"><img src="img/living.jpg" alt="3D render of a furnished living room with sofa, armchair, coffee table, TV stand and bookshelf" width="1200" height="825"></div>
+        <div class="img"><img src="img/living.jpg" alt="Cutaway 3D view of a furnished home: kitchen, living room, bathroom and bedroom" width="1200" height="825"></div>
         <span class="float f1"><i></i>Live prototype render</span>
-        <div class="receipt num" aria-label="Sample shopping list for the room shown">
+        <div class="receipt num" aria-label="Sample shopping list for the home shown">
           <ul>
-            <li><span>Sofa, 4-seat</span><span>$1,399</span></li>
-            <li><span>Armchair</span><span>$469</span></li>
-            <li><span>TV stand 71"</span><span>$449</span></li>
-            <li><span>Area rug</span><span>$439</span></li>
-            <li><span>4 more items</span><span>$677</span></li>
+            <li><span>Living room</span><span>$5,332</span></li>
+            <li><span>Kitchen</span><span>$6,637</span></li>
+            <li><span>Bedroom</span><span>$4,445</span></li>
+            <li><span>Bathroom</span><span>$3,117</span></li>
           </ul>
-          <div class="tot"><span>Room total</span><span>$3,433</span></div>
+          <div class="tot"><span>Home total</span><span>$19,531</span></div>
         </div>
       </div>
       <div class="trio"><span>Real 3D rooms</span><span>Sizes to the inch</span><span>Fits your budget</span></div>
@@ -220,7 +219,7 @@ footer{background:var(--night); border-top:1px solid var(--night-line); color:va
         <p>You fall for a picture of a room. <b>Then the real work starts.</b> Finding pieces that look like it, fit your walls and add up to a number you can live with is the part <b>no drawing ever did for you.</b></p>
       </div>
       <div class="pain">
-        <div class="img"><img src="img/top.jpg" alt="Top-down view of a furnished living room drawn to scale" width="1200" height="900" loading="lazy"></div>
+        <div class="img"><img src="img/top.jpg" alt="Floor plan editor showing four furnished rooms drawn to scale" width="1200" height="900" loading="lazy"></div>
         <div class="cards">
           <div><em>↔</em><h3>The sofa that blocks the door</h3><p>It looked right online. In the room it is <b>six inches too deep.</b></p></div>
           <div><em>$</em><h3>The budget that breaks at checkout</h3><p>Every piece seemed fine on its own. <b>Together they are double the plan.</b></p></div>
@@ -249,8 +248,8 @@ footer{background:var(--night); border-top:1px solid var(--night-line); color:va
     <div class="wrap">
       <div class="center">
         <span class="badge"><i></i>From the working prototype</span>
-        <h2>Design One Room <span class="hl">See The Bill Instantly</span></h2>
-        <p>Enter a room, pick a style and a budget, and the layout engine does the rest. These are real outputs of the engine as it works today.</p>
+        <h2>Design Your Home <span class="hl">See The Bill Instantly</span></h2>
+        <p>Lay out your rooms, pick a style and a budget, and the planner furnishes the whole home. These are real outputs of the planner as it works today.</p>
       </div>
       <div class="chips">
         <span class="chip">✓ <b>Fits</b> the room</span>
@@ -259,9 +258,9 @@ footer{background:var(--night); border-top:1px solid var(--night-line); color:va
         <span class="chip">✓ <b>Walk</b> through it</span>
       </div>
       <div class="shots">
-        <figure><div class="img"><img src="img/bedroom.jpg" alt="3D render of a furnished bedroom" width="1200" height="900" loading="lazy"></div><figcaption>Bedroom, dark palette, $6,000 budget</figcaption></figure>
-        <figure><div class="img"><img src="img/walk.jpg" alt="Eye-level view inside a furnished living room" width="1200" height="900" loading="lazy"></div><figcaption>Walk-through at eye level</figcaption></figure>
-        <figure><div class="img"><img src="img/top.jpg" alt="Top-down plan view of a furnished room" width="1200" height="900" loading="lazy"></div><figcaption>Top view, drawn to scale</figcaption></figure>
+        <figure><div class="img"><img src="img/bedroom.jpg" alt="Cutaway 3D view of the same home in an industrial style" width="1200" height="900" loading="lazy"></div><figcaption>The same home in an industrial style</figcaption></figure>
+        <figure><div class="img"><img src="img/walk.jpg" alt="Eye-level view from inside a furnished room" width="1200" height="900" loading="lazy"></div><figcaption>Walk-through at eye level</figcaption></figure>
+        <figure><div class="img"><img src="img/top.jpg" alt="Floor plan editor showing four furnished rooms drawn to scale" width="1200" height="900" loading="lazy"></div><figcaption>Plan editor: drag rooms, doors and windows</figcaption></figure>
       </div>
       <p class="disclose">Furniture shown is placeholder geometry. Store products replace it at launch.</p>
     </div>
