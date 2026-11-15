@@ -68,3 +68,19 @@ test('removed items stay out and are reported', () => {
   assert.ok(!p.lines.some(l => l.cat === 'rug' || l.cat === 'floor'));
   assert.strictEqual(p.excluded.filter(x => x.reason === 'removed').map(x => x.cat).sort().join(','), 'floor,rug');
 });
+
+test('the plan detector finds the rooms of a drawn plan and ignores the outside', () => {
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'app', 'js', 'recognize.js'), 'utf8'), ctx, { filename: 'recognize.js' });
+  /* 300 x 200 sheet: a 240 x 160 building split into three rooms, with door gaps in the partitions. */
+  const w = 300, h = 200, px = new Uint8ClampedArray(w * h * 4).fill(255);
+  const ink = (x0, y0, x1, y1) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) { const i = (y * w + x) * 4; px[i] = px[i + 1] = px[i + 2] = 0; } };
+  ink(30, 20, 270, 22); ink(30, 178, 270, 180); ink(30, 20, 32, 180); ink(268, 20, 270, 180);   // outer walls
+  ink(160, 20, 162, 90); ink(160, 108, 162, 180);                                               // vertical partition, gap 90..108
+  ink(162, 100, 200, 102); ink(218, 100, 270, 102);                                             // horizontal partition, gap 200..218
+  ctx.__px = px;
+  const boxes = run('PlanRecognizer.detectPixels(__px, 300, 200)');
+  assert.strictEqual(boxes.length, 3);
+  const big = boxes[0];
+  assert.ok(Math.abs(big.x - 30 / 300) < 0.03 && Math.abs(big.w - 130 / 300) < 0.05 && Math.abs(big.h - 160 / 200) < 0.06, 'largest room matches the left room');
+  for (const b of boxes) assert.ok(b.x > 0.05 && b.y > 0.05 && b.x + b.w < 0.95 && b.y + b.h < 0.95, 'no box covers the margin');
+});

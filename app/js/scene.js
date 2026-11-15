@@ -34,10 +34,56 @@ const Scene3D = (function () {
   function clearGroup(g) { while (g.children.length) { const c = g.children[0]; g.remove(c); c.traverse(o => { if (o.geometry) o.geometry.dispose(); }); } }
   function plane(w, h, mat, pos, rotY) { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat); m.position.set(pos[0], pos[1], pos[2]); m.rotation.y = rotY; return m; }
 
+  /* One solid wall with real thickness, a door opening with an open leaf and a glazed window opening.
+     The wall is a group scaled along Y, so it can grow from the floor and drop to a stub when it would block the view. */
+  const WT = 0.06, LOW = 0.05;
+  let walls = [], wallMemo = {};
+  function buildWall(r, o, w, wm, white, S) {
+    const len = wallLen(r, w), n = WALLS[w].n, hz = WALLS[w].horiz, g = new THREE.Group();
+    const box = (t0, t1, y0, y1, mat, depth, off) => {
+      if (t1 - t0 < 0.005 || y1 - y0 < 0.005) return null;
+      const d = depth || WT, c = wallPoint(r, w, (t0 + t1) / 2), q = (off == null ? d / 2 : off);
+      const m = new THREE.Mesh(new THREE.BoxGeometry(hz ? t1 - t0 : d, y1 - y0, hz ? d : t1 - t0), mat);
+      m.position.set(c[0] + n[0] * q, (y0 + y1) / 2, c[1] + n[1] * q); m.receiveShadow = true; g.add(m); return m;
+    };
+    const ops = [];
+    if (r.door.wall === w) ops.push({ t0: r.door.t - 0.45, t1: r.door.t + 0.45, y0: 0, y1: 2.05, door: true });
+    if (r.win.wall === w && !(ops.length && r.win.t - 0.7 < ops[0].t1 && r.win.t + 0.7 > ops[0].t0)) ops.push({ t0: r.win.t - 0.7, t1: r.win.t + 0.7, y0: 0.9, y1: 2.2 });
+    ops.sort((a, b) => a.t0 - b.t0);
+    let cur = 0;
+    ops.forEach(op => {
+      box(cur, op.t0, 0, H, wm); box(op.t0, op.t1, 0, op.y0, wm); box(op.t0, op.t1, op.y1, H, wm); cur = op.t1;
+      if (op.door) {
+        const a = hz ? [1, 0] : [0, 1], ang = 1.3, d = [a[0] * Math.cos(ang) + n[0] * Math.sin(ang), a[1] * Math.cos(ang) + n[1] * Math.sin(ang)];
+        const hinge = wallPoint(r, w, op.t0), piv = new THREE.Group();
+        piv.position.set(hinge[0] + n[0] * WT, 0, hinge[1] + n[1] * WT); piv.rotation.y = Math.atan2(-d[1], d[0]);
+        const leaf = new THREE.Mesh(new THREE.BoxGeometry(0.86, 2.0, 0.04), M(shade(S.wood[1], -0.12), 0.7)); leaf.position.set(0.43, 1.0, 0); leaf.castShadow = true;
+        piv.add(leaf); g.add(piv);
+      } else {
+        box(op.t0, op.t1, op.y0, op.y1, new THREE.MeshStandardMaterial({ color: lin(0xcfe5f4), transparent: true, opacity: 0.45, roughness: 0.1 }), 0.012, WT / 2);
+        box(op.t0, op.t1, op.y0, op.y0 + 0.04, white, WT + 0.02, WT / 2); box(op.t0, op.t1, op.y1 - 0.04, op.y1, white, WT + 0.02, WT / 2);
+        const mid = (op.t0 + op.t1) / 2; box(mid - 0.02, mid + 0.02, op.y0, op.y1, white, WT + 0.02, WT / 2);
+      }
+    });
+    box(cur, len, 0, H, wm);
+    const key = o.id + ':' + w, c = wallPoint(r, w, len / 2), start = wallMemo[key] == null ? 0.02 : wallMemo[key];
+    g.scale.y = start;
+    walls.push({ g, key, nx: -n[0], nz: -n[1], cx: o.x + c[0], cz: o.y + c[1], cur: start });
+    return g;
+  }
+  function animateWalls() {
+    const cp = T.camera.position; let moving = false;
+    walls.forEach(wl => {
+      const target = view === 'walk' ? 1 : ((cp.x - wl.cx) * wl.nx + (cp.z - wl.cz) * wl.nz > 0 ? LOW : 1);
+      if (Math.abs(target - wl.cur) > 0.002) { wl.cur += (target - wl.cur) * 0.16; moving = true; } else wl.cur = target;
+      wl.g.scale.y = wl.cur; wallMemo[wl.key] = wl.cur;
+    });
+    return moving;
+  }
   function build(p, style) {
     plans = p;
     if (!T) return;
-    clearGroup(T.roomG); clearGroup(T.furnG);
+    clearGroup(T.roomG); clearGroup(T.furnG); walls = [];
     texes.forEach(t => t.dispose()); texes = [];
     if (!plans.length) { T.dirty = true; return; }
     const S = STYLES[style];
@@ -56,15 +102,7 @@ const Scene3D = (function () {
       const fl = new THREE.Mesh(new THREE.PlaneGeometry(r.W, r.D), fmat);
       fl.rotation.x = -Math.PI / 2; fl.position.set(r.W / 2, 0, r.D / 2); fl.receiveShadow = true; g.add(fl);
       const ceil = new THREE.Mesh(new THREE.PlaneGeometry(r.W, r.D), M(0xf7f6f3, 1)); ceil.rotation.x = Math.PI / 2; ceil.position.set(r.W / 2, H, r.D / 2); g.add(ceil);
-      for (const w in WALLS) { const len = wallLen(r, w), pt = wallPoint(r, w, len / 2); const m = plane(len, H, wm, [pt[0], H / 2, pt[1]], ROT[w]); m.receiveShadow = true; g.add(m); }
-      const onW = (w, t, off, y) => { const pt = wallPoint(r, w, t), n = WALLS[w].n; return [pt[0] + n[0] * off, y, pt[1] + n[1] * off]; };
-      const dw = r.door.wall, dt = r.door.t, ww = r.win.wall, wt = r.win.t;
-      g.add(plane(1.0, 2.1, white, onW(dw, dt, 0.004, 1.05), ROT[dw]));
-      g.add(plane(0.88, 2.03, M(shade(S.wood[1], -0.12), 0.7), onW(dw, dt, 0.008, 1.015), ROT[dw]));
-      g.add(plane(1.5, 1.4, white, onW(ww, wt, 0.004, 1.55), ROT[ww]));
-      g.add(plane(1.38, 1.28, new THREE.MeshBasicMaterial({ color: lin(0xcfe5f4) }), onW(ww, wt, 0.008, 1.55), ROT[ww]));
-      g.add(plane(0.04, 1.28, white, onW(ww, wt, 0.012, 1.55), ROT[ww]));
-      g.add(plane(1.38, 0.04, white, onW(ww, wt, 0.012, 1.75), ROT[ww]));
+      for (const w in WALLS) g.add(buildWall(r, o, w, wm, white, S));
       T.roomG.add(g);
       const byCat = {}; pl.lines.forEach(l => byCat[l.cat] = l.item);
       pl.placed.forEach(q => {
@@ -119,7 +157,7 @@ const Scene3D = (function () {
         T.dirty = true;
       }
     }
-    if (T.dirty && canvas.clientWidth) { T.dirty = false; placeCamera(); T.renderer.render(T.scene, T.camera); }
+    if (canvas.clientWidth && (T.dirty || T.growing)) { T.dirty = false; placeCamera(); T.growing = animateWalls(); T.renderer.render(T.scene, T.camera); }
   }
   function resize() {
     if (!T) return; const w = stage.clientWidth, h = stage.clientHeight; if (!w || !h) return;
@@ -160,5 +198,6 @@ const Scene3D = (function () {
     onPick(hit ? { roomId: hit.roomId, cat: hit.cat } : null);
   }
   function hold(key, on) { keys[key] = on; }
-  return { init, build, setView, setSelected, resize, hold, refresh: function () { if (T) T.dirty = true; } };
+  function regrow() { wallMemo = {}; walls.forEach(wl => { wl.cur = 0.02; wl.g.scale.y = 0.02; }); if (T) T.growing = true; }
+  return { init, build, setView, setSelected, resize, hold, regrow, refresh: function () { if (T) T.dirty = true; } };
 })();

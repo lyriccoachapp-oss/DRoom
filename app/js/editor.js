@@ -1,8 +1,8 @@
 'use strict';
 /* 2D plan editor (SVG). Drag a room to move it, the corner handle to resize it, and the door or window marker along the walls. */
 const PlanEditor = (function () {
-  const NS = 'http://www.w3.org/2000/svg', S = 100, MIN = 1.6, MAX = 9;
-  let svg, get, onChange, onSelect, drag = null, fitted = false;
+  const NS = 'http://www.w3.org/2000/svg', S = 100, MIN = 1.6, MAX = 12;
+  let svg, get, onChange, onSelect, drag = null, fitted = false, cal = null;
   const snap = v => Math.round(v * 10) / 10;
   function el(name, attrs, parent, text) {
     const e = document.createElementNS(NS, name);
@@ -44,7 +44,7 @@ const PlanEditor = (function () {
     const vb = svg.getAttribute('viewBox').split(' ').map(Number);
     el('rect', { x: vb[0], y: vb[1], width: vb[2], height: vb[3], fill: 'url(#grid)' }, svg);
     if (st.trace) el('image', { href: st.trace.src, x: 0, y: 0, width: st.trace.width * S, height: st.trace.width / st.trace.aspect * S, opacity: st.trace.opacity, preserveAspectRatio: 'none', 'pointer-events': 'none' }, svg);
-    if (!st.rooms.length) { el('text', { x: vb[0] + vb[2] / 2, y: vb[1] + vb[3] / 2, class: 'hintText', 'text-anchor': 'middle' }, svg, 'Add a room to start'); return; }
+    if (!st.rooms.length) { el('text', { x: vb[0] + vb[2] / 2, y: vb[1] + vb[3] / 2, class: 'hintText', 'text-anchor': 'middle' }, svg, st.trace ? 'Detect rooms or add them by hand' : 'Add a room to start'); drawCal(); return; }
     st.rooms.forEach((o, i) => {
       const pl = st.plans[i], on = o.id === st.roomId, g = el('g', { class: 'rm' + (on ? ' on' : '') + (st.clash && st.clash.has(o.id) ? ' clash' : '') }, svg);
       el('rect', { x: o.x * S, y: o.y * S, width: o.W * S, height: o.D * S, class: 'room', 'data-act': 'move', 'data-room': o.id }, g);
@@ -62,8 +62,19 @@ const PlanEditor = (function () {
       const lab = el('text', { x: o.x * S - 6, y: o.y * S - 22, class: 'rname' }, g, o.name + '  ');
       el('tspan', { class: 'rsize' }, lab, fmtLen(o.W) + ' \u00d7 ' + fmtLen(o.D));
     });
+    drawCal();
+  }
+  function drawCal() {
+    if (!cal) return;
+    if (cal.pts.length === 2) el('line', { x1: cal.pts[0].x * S, y1: cal.pts[0].y * S, x2: cal.pts[1].x * S, y2: cal.pts[1].y * S, class: 'calline' }, svg);
+    cal.pts.forEach(p => el('circle', { cx: p.x * S, cy: p.y * S, r: 14, class: 'calpt' }, svg));
   }
   function down(e) {
+    if (cal && cal.pts.length < 2) {
+      e.preventDefault(); cal.pts.push(world(e)); render();
+      if (cal.pts.length === 2) cal.cb(cal.pts[0], cal.pts[1]);
+      return;
+    }
     const t = e.target.closest ? e.target.closest('[data-act]') : null; if (!t) return;
     const st = get(), room = st.rooms.find(o => o.id === t.dataset.room); if (!room) return;
     e.preventDefault();
@@ -96,5 +107,8 @@ const PlanEditor = (function () {
     onChange();
   }
   function up() { if (!drag) return; drag = null; render(); onChange(); }
-  return { init, render, refit: function () { fitted = false; } };
+  /* Scale calibration: the next two clicks mark the ends of a known length. */
+  function calibrate(cb) { cal = { pts: [], cb }; render(); }
+  function endCalibrate() { cal = null; render(); }
+  return { init, render, calibrate, endCalibrate, refit: function () { fitted = false; } };
 })();

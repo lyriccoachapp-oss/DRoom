@@ -63,6 +63,9 @@ input[type=file]{max-width:100%; font-size:13px}
 .btn{border:1px solid var(--line); background:var(--bg); border-radius:10px; padding:8px 12px; font-weight:600}
 .btn:hover{border-color:var(--accent)}
 .btn.danger{color:var(--warn)}
+.btn.primary{background:var(--sun); color:var(--sun-ink); border-color:var(--sun)}
+.calline{stroke:var(--accent); stroke-width:8; stroke-dasharray:18 12; pointer-events:none}
+.calpt{fill:var(--accent); stroke:var(--panel); stroke-width:5; pointer-events:none}
 .btnrow{display:flex; gap:8px; flex-wrap:wrap}
 .btnrow .btn{flex:1 1 40%}
 .note{font-size:12px; color:var(--muted); margin:0}
@@ -185,20 +188,23 @@ input[type=file]{max-width:100%; font-size:13px}
       <div class="grp" id="roomGrp">
         <h2>Selected room</h2>
         <div class="row"><label for="inName">Name</label><input id="inName" type="text" maxlength="24" autocomplete="off"></div>
-        <div class="row"><label for="selType">Type</label><select id="selType"><option value="living">Living room</option><option value="bedroom">Bedroom</option><option value="kitchen">Kitchen</option><option value="bathroom">Bathroom</option><option value="dining">Dining room</option><option value="office">Office</option></select></div>
-        <div class="row"><label for="inW">Width</label><input id="inW" type="range" min="1.6" max="9" step="0.1"><output id="outW" class="num"></output></div>
-        <div class="row"><label for="inD">Depth</label><input id="inD" type="range" min="1.6" max="9" step="0.1"><output id="outD" class="num"></output></div>
+        <div class="row"><label for="selType">Type</label><select id="selType"><option value="living">Living room</option><option value="bedroom">Bedroom</option><option value="kitchen">Kitchen</option><option value="bathroom">Bathroom</option><option value="dining">Dining room</option><option value="office">Office</option><option value="hall">Hallway</option></select></div>
+        <div class="row"><label for="inW">Width</label><input id="inW" type="range" min="1.6" max="12" step="0.1"><output id="outW" class="num"></output></div>
+        <div class="row"><label for="inD">Depth</label><input id="inD" type="range" min="1.6" max="12" step="0.1"><output id="outD" class="num"></output></div>
         <button type="button" class="btn danger" id="delRoom">Delete room</button>
       </div>
       <div class="grp">
-        <h2>Trace a floor plan</h2>
-        <input id="inTrace" type="file" accept="image/*" aria-label="Floor plan image">
+        <h2>Your floor plan</h2>
+        <input id="inTrace" type="file" accept="image/*,application/pdf,.pdf" aria-label="Floor plan image or PDF">
         <div id="traceCtl" class="grp" hidden>
           <div class="row"><label for="inTraceW">Width</label><input id="inTraceW" type="range" min="3" max="40" step="0.1"><output id="outTraceW" class="num"></output></div>
           <div class="row"><label for="inTraceO">Fade</label><input id="inTraceO" type="range" min="0.1" max="1" step="0.05"><output id="outTraceO" class="num"></output></div>
+          <div class="btnrow"><button type="button" class="btn primary" id="btnDetect">Detect rooms</button><button type="button" class="btn" id="btnCal">Set scale</button></div>
+          <p class="note" id="traceMsg" hidden></p>
+          <div class="row" id="calRow" hidden><label for="inCal" id="calLabel">Length</label><input id="inCal" type="text" inputmode="decimal" autocomplete="off"><button type="button" class="btn" id="btnCalOk">Apply</button></div>
           <button type="button" class="btn" id="btnTraceOff">Remove image</button>
         </div>
-        <p class="note">Load a picture of your plan, set its real width, then place rooms over it. Images only. The picture stays on this device and is not saved with the project.</p>
+        <p class="note">Load a picture of your plan, then let the planner find the rooms. Set the scale by clicking the two ends of a wall you know the length of. Pictures and PDFs (first page) work; the file is not saved with the project.</p>
       </div>
       <button type="button" class="btn" id="btnReset">Redo the whole design</button>
       <p class="note">In Plan view, drag a room to move it, the orange corner to resize it, and the round markers to move its door and window.</p>
@@ -247,4 +253,5 @@ input[type=file]{max-width:100%; font-size:13px}
 <script src="js/models.js"></script>
 <script src="js/scene.js"></script>
 <script src="js/editor.js"></script>
+<script src="js/recognize.js"></script>
 <script src="js/app.js"></script>

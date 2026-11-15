@@ -2,7 +2,7 @@
 /* App state, UI wiring and the shopping list. */
 (function () {
   const KEY = 'droom.home.v2';
-  const SIZE = { living: [4.8, 4.0], bedroom: [3.8, 3.6], kitchen: [3.8, 3.2], bathroom: [2.4, 2.2], dining: [4.0, 3.6], office: [3.2, 3.0] };
+  const SIZE = { living: [4.8, 4.0], bedroom: [3.8, 3.6], kitchen: [3.8, 3.2], bathroom: [2.4, 2.2], dining: [4.0, 3.6], office: [3.2, 3.0], hall: [3.0, 1.6] };
   let uid = 1;
   const newId = () => 'r' + Date.now().toString(36) + (uid++);
   function makeRoom(type, x, y, W, D) {
@@ -172,7 +172,9 @@
   seg('#segUnits', v => { state.units = UNITS.v = v; update(); });
   $('#selType').addEventListener('change', e => { const v = e.target.value, r = room(); if (!r || r.type === v) return; if (r.name === ROOMS[r.type].name) r.name = ROOMS[v].name; r.type = v; r.overrides = {}; r.removed = []; sel = null; update(); });
   seg('#segView', v => {
+    const fromPlan = state.view === 'plan';
     state.view = v; save(); renderSide();
+    if (v !== 'plan' && fromPlan) Scene3D.regrow();
     if (v !== 'plan') { if (sceneStale) syncScene(); Scene3D.setView(v, planOf(state.roomId) || plans[0]); Scene3D.resize(); }
   });
   $('#inBudget').addEventListener('input', e => { state.budget = parseInt(e.target.value, 10); update(); });
@@ -222,15 +224,113 @@
     $('#inTraceW').value = trace.width; $('#outTraceW').textContent = fmtLen(trace.width);
     $('#inTraceO').value = trace.opacity; $('#outTraceO').textContent = Math.round(trace.opacity * 100) + '%';
   }
+  function useImage(src, file) {
+    const img = new Image();
+    img.onload = () => { trace = { src, aspect: img.width / img.height || 1, width: 12, opacity: 0.5, img, file }; say('Plan loaded. Press Detect rooms, then check the scale.'); PlanEditor.refit(); traceUi(); PlanEditor.render(); };
+    img.onerror = () => say('This file could not be opened as a picture.');
+    img.src = src;
+  }
+  /* pdf.js is fetched only when someone opens a PDF. */
+  const PDFJS = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/';
+  function loadPdfJs() {
+    return new Promise((res, rej) => {
+      if (window.pdfjsLib) { res(window.pdfjsLib); return; }
+      const sc = document.createElement('script'); sc.src = PDFJS + 'pdf.min.js';
+      sc.onload = () => { if (!window.pdfjsLib) { rej(new Error('pdf.js missing')); return; } window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS + 'pdf.worker.min.js'; res(window.pdfjsLib); };
+      sc.onerror = () => rej(new Error('pdf.js failed to load'));
+      document.head.appendChild(sc);
+    });
+  }
+  async function usePdf(file) {
+    say('Opening the PDF…');
+    try {
+      const lib = await loadPdfJs(), doc = await lib.getDocument({ data: await file.arrayBuffer() }).promise, page = await doc.getPage(1);
+      const base = page.getViewport({ scale: 1 }), vp = page.getViewport({ scale: Math.min(4, 2000 / Math.max(base.width, base.height)) });
+      const c = document.createElement('canvas'); c.width = Math.round(vp.width); c.height = Math.round(vp.height);
+      const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
+      await page.render({ canvasContext: g, viewport: vp }).promise;
+      const blob = await new Promise(r => c.toBlob(r, 'image/png'));
+      useImage(c.toDataURL('image/png'), blob);
+      if (doc.numPages > 1) setTimeout(() => say('Plan loaded from page 1 of ' + doc.numPages + '. Press Detect rooms, then check the scale.'), 50);
+    } catch (e) { say('This PDF could not be opened. Save the plan page as a picture and load that.'); }
+  }
   $('#inTrace').addEventListener('change', e => {
     const f = e.target.files && e.target.files[0]; if (!f) return;
-    const rd = new FileReader();
-    rd.onload = () => { const img = new Image(); img.onload = () => { trace = { src: rd.result, aspect: img.width / img.height || 1, width: 12, opacity: 0.5 }; PlanEditor.refit(); traceUi(); PlanEditor.render(); }; img.src = rd.result; };
-    rd.readAsDataURL(f);
+    if (f.type === 'application/pdf' || /\.pdf$/i.test(f.name)) { usePdf(f); return; }
+    const rd = new FileReader(); rd.onload = () => useImage(rd.result, f); rd.readAsDataURL(f);
   });
   $('#inTraceW').addEventListener('input', e => { if (trace) { trace.width = parseFloat(e.target.value); PlanEditor.refit(); traceUi(); PlanEditor.render(); } });
   $('#inTraceO').addEventListener('input', e => { if (trace) { trace.opacity = parseFloat(e.target.value); traceUi(); PlanEditor.render(); } });
-  $('#btnTraceOff').addEventListener('click', () => { trace = null; $('#inTrace').value = ''; PlanEditor.refit(); traceUi(); PlanEditor.render(); });
+  /* ---------- recognition and scale ---------- */
+  function say(t) { const m = $('#traceMsg'); m.hidden = !t; m.textContent = t || ''; }
+  function rescale(k) {
+    if (!isFinite(k) || k <= 0) return;
+    if (trace) trace.width = clamp(trace.width * k, 1, 200);
+    state.rooms.forEach(r => { r.x = Math.round(r.x * k * 10) / 10; r.y = Math.round(r.y * k * 10) / 10; r.W = clamp(Math.round(r.W * k * 10) / 10, 1.6, 12); r.D = clamp(Math.round(r.D * k * 10) / 10, 1.6, 12); });
+  }
+  function roomsFromBoxes(list) {
+    const hgt = trace.width / trace.aspect, rooms = list.map(b => {
+      const W = clamp(Math.round(b.w * trace.width * 10) / 10, 1.6, 12), D = clamp(Math.round(b.h * hgt * 10) / 10, 1.6, 12);
+      const r = makeRoom(b.type, Math.round(b.x * trace.width * 10) / 10, Math.round(b.y * hgt * 10) / 10, W, D);
+      if (b.name) r.name = b.name; return r;
+    });
+    const cx = rooms.reduce((s, r) => s + r.x + r.W / 2, 0) / rooms.length, cy = rooms.reduce((s, r) => s + r.y + r.D / 2, 0) / rooms.length;
+    const seen = {};
+    rooms.forEach(r => {
+      const dx = cx - (r.x + r.W / 2), dy = cy - (r.y + r.D / 2);
+      r.doorWall = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'E' : 'W') : (dy > 0 ? 'S' : 'N'); r.winWall = OPP[r.doorWall]; r.doorPos = 0.5; r.winPos = 0.5;
+      seen[r.name] = (seen[r.name] || 0) + 1; if (seen[r.name] > 1) r.name = (r.name + ' ' + seen[r.name]).slice(0, 24);
+    });
+    return rooms;
+  }
+  let busy = false;
+  $('#btnDetect').addEventListener('click', async () => {
+    if (!trace || busy) return;
+    busy = true; $('#btnDetect').disabled = true; say('Looking for rooms\u2026');
+    try {
+      const boxes = PlanRecognizer.detect(trace.img);
+      let list = null, how = '';
+      try {
+        const sample = window.claude && window.claude.use ? await window.claude.use('sample') : null;
+        const lim = sample ? await sample.limits().catch(() => null) : null;
+        if (sample && lim && lim.images) {
+          say('Found ' + boxes.length + ' enclosed spaces. Asking Claude to name them and read the scale\u2026');
+          const res = await PlanRecognizer.label(sample, trace.file, boxes);
+          if (res.rooms.length) { list = res.rooms; how = 'named by Claude'; if (res.width_m) { trace.width = res.width_m; how += ', scale read from the drawing'; } }
+        }
+      } catch (e) { /* AI is optional: fall back to size-based guesses */ }
+      if (!list) {
+        if (!boxes.length) { say('No enclosed rooms found in this picture. Add rooms by hand over it.'); return; }
+        const hgt = trace.width / trace.aspect, types = PlanRecognizer.guessTypes(boxes.map(b => ({ W: b.w * trace.width, D: b.h * hgt })));
+        list = boxes.map((b, i) => Object.assign({ type: types[i] }, b)); how = 'types guessed from size';
+      }
+      state.rooms = roomsFromBoxes(list); state.roomId = state.rooms[0].id; sel = null;
+      PlanEditor.refit(); traceUi(); update();
+      say('Found ' + state.rooms.length + ' rooms (' + how + '). Check the scale with Set scale, then fix anything that is off. Undo brings the old plan back.');
+    } finally { busy = false; $('#btnDetect').disabled = false; }
+  });
+  let calPts = null;
+  $('#btnCal').addEventListener('click', () => {
+    calPts = null; $('#calRow').hidden = true; say('Click the two ends of a wall or dimension line whose real length you know.');
+    PlanEditor.calibrate((a, b) => {
+      calPts = [a, b]; $('#calLabel').textContent = UNITS.v === 'm' ? 'Metres' : 'Feet'; $('#calRow').hidden = false; $('#inCal').value = ''; $('#inCal').focus();
+      say('Now type the real length of that line and press Apply.');
+    });
+    if (state.view !== 'plan') $('#segView button[data-v=plan]').click();
+  });
+  function applyCal() {
+    if (!calPts) return;
+    const txt = $('#inCal').value.replace(',', '.').trim(), m = txt.match(/^(\d+(?:\.\d+)?)\s*(?:'|ft)?\s*(?:(\d+(?:\.\d+)?)\s*(?:"|in)?)?$/i);
+    if (!m) { say('Type a number, for example 12.5' + (UNITS.v === 'm' ? '' : ' or 12\' 6"') + '.'); return; }
+    const real = UNITS.v === 'm' ? parseFloat(m[1]) : parseFloat(m[1]) * 0.3048 + (m[2] ? parseFloat(m[2]) * 0.0254 : 0);
+    const meas = Math.hypot(calPts[0].x - calPts[1].x, calPts[0].y - calPts[1].y);
+    if (!(real > 0) || meas < 0.05) { say('That line is too short. Press Set scale and try again.'); return; }
+    rescale(real / meas); calPts = null; $('#calRow').hidden = true; PlanEditor.endCalibrate(); PlanEditor.refit(); traceUi(); update();
+    say('Scale set: the picture is ' + fmtLen(trace ? trace.width : 0) + ' wide.');
+  }
+  $('#btnCalOk').addEventListener('click', applyCal);
+  $('#inCal').addEventListener('keydown', e => { if (e.key === 'Enter') applyCal(); });
+  $('#btnTraceOff').addEventListener('click', () => { say(''); $('#calRow').hidden = true; PlanEditor.endCalibrate(); trace = null; $('#inTrace').value = ''; PlanEditor.refit(); traceUi(); PlanEditor.render(); });
   has3d = Scene3D.init($('#cv'), $('#stage'), s => select(s, true));
   update(true); hist.push(snapshot()); hi = 0; histButtons();
   if (state.view !== 'plan') { Scene3D.setView(state.view, planOf(state.roomId) || plans[0]); Scene3D.resize(); }
