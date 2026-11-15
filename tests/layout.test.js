@@ -177,3 +177,14 @@ test('walking: walls block, doors let you through, and paths stay inside', () =>
   assert.ok(lp && lp.length >= 2, 'path bends round the notch');
   assert.ok(!run('walkArea(__l)(4.5, 1)'), 'the notch is not walkable');
 });
+
+test('a wall colour adds paint by the gallon to the room', () => {
+  ctx.__room = { id: 'x', name: 'b', type: 'bedroom', x: 0, y: 0, W: 4, D: 3.5, doorWall: 'S', doorPos: 0.5, winWall: 'N', winPos: 0.5, overrides: {}, removed: [] };
+  assert.ok(!run('planRoom(__room, "scandi", 9000)').lines.some(l => l.cat === 'paint'), 'no paint without a colour');
+  ctx.__room.wallColor = '#B7C2AB';
+  const p = run('planRoom(__room, "scandi", 9000)'), paint = p.lines.find(l => l.cat === 'paint');
+  /* walls 2 x (4 + 3.5) x 2.7 = 40.5 m2, less door and window = about 37 m2; two coats at 37 m2 a gallon = 2 gallons */
+  assert.ok(paint && paint.unit === 'gal' && paint.qty === 2, `gallons: ${paint && paint.qty}`);
+  const tight = run('planRoom(__room, "scandi", 200)');
+  assert.ok(tight.lines.some(l => l.cat === 'paint'), 'paint stays when the budget is short');
+});

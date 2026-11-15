@@ -63,6 +63,12 @@ input[type=file]{max-width:100%; font-size:13px}
 .btn{border:1px solid var(--line); background:var(--bg); border-radius:10px; padding:8px 12px; font-weight:600}
 .btn:hover{border-color:var(--accent)}
 .btn.danger{color:var(--warn)}
+.paints{flex:1; display:flex; flex-wrap:wrap; gap:6px; align-items:center}
+.paints button,.paints label{width:26px; height:26px; border-radius:50%; border:1px solid var(--line); padding:0; position:relative; cursor:pointer}
+.paints button[aria-pressed="true"]{box-shadow:0 0 0 2px var(--panel), 0 0 0 4px var(--accent)}
+.paints .nopaint{background:repeating-linear-gradient(45deg, var(--bg) 0 4px, var(--line) 4px 6px)}
+.paints label{background:conic-gradient(#e66 0 25%, #6c6 0 50%, #66e 0 75%, #ec6 0)}
+.paints input{position:absolute; inset:0; opacity:0; width:100%; height:100%; cursor:pointer}
 .btn.primary{background:var(--sun); color:var(--sun-ink); border-color:var(--sun)}
 .calline{stroke:var(--accent); stroke-width:8; stroke-dasharray:18 12; pointer-events:none}
 .calpt{fill:var(--accent); stroke:var(--panel); stroke-width:5; pointer-events:none}
@@ -213,6 +219,7 @@ input[type=file]{max-width:100%; font-size:13px}
         <div class="row"><label for="inName">Name</label><input id="inName" type="text" maxlength="24" autocomplete="off"></div>
         <div class="row"><label for="selType">Type</label><select id="selType"><option value="living">Living room</option><option value="bedroom">Bedroom</option><option value="kitchen">Kitchen</option><option value="bathroom">Bathroom</option><option value="dining">Dining room</option><option value="office">Office</option><option value="hall">Hallway</option></select></div>
         <div class="row"><label for="selShape">Shape</label><select id="selShape"><option value="">Rectangle</option><option value="NE">L, notch top right</option><option value="NW">L, notch top left</option><option value="SE">L, notch bottom right</option><option value="SW">L, notch bottom left</option></select></div>
+        <div class="row"><label>Walls</label><div class="paints" id="paints" role="group" aria-label="Wall colour"></div></div>
         <div class="row"><label for="selDoor">Door</label><select id="selDoor"><option value="swing">Hinged</option><option value="pocket">Pocket</option><option value="barn">Barn, sliding</option><option value="open">Open, no door</option></select></div>
         <div class="row"><label for="selDoorW">Opening</label><select id="selDoorW"><option value="0.71">28 in</option><option value="0.76">30 in</option><option value="0.81">32 in</option><option value="0.86">34 in</option><option value="0.91">36 in</option></select></div>
         <div class="btnrow" id="doorBtns"><button type="button" class="btn" id="btnDoorSide">Flip hinge side</button><button type="button" class="btn" id="btnDoorSwing">Open outward</button></div>

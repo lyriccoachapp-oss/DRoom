@@ -134,7 +134,8 @@ const Scene3D = (function () {
       } else fmat = M(0x9a9a98, 0.95);
       const fl = outlineMesh(o, fmat, false); fl.receiveShadow = true; fl.userData.floor = true; g.add(fl); floors.push(fl);
       g.add(outlineMesh(o, M(0xf7f6f3, 1), true));
-      wallSegments(r).forEach(seg => g.add(buildWall(r, o, seg, wm, white, S)));
+      const wmr = /^#[0-9a-f]{6}$/i.test(o.wallColor || '') ? M(parseInt(o.wallColor.slice(1), 16), 1) : wm;
+      wallSegments(r).forEach(seg => g.add(buildWall(r, o, seg, wmr, white, S)));
       T.roomG.add(g);
       const byCat = {}; pl.lines.forEach(l => byCat[l.cat] = l.item);
       pl.placed.forEach(q => {
