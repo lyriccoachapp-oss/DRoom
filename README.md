@@ -2,6 +2,7 @@
 
 3D home planner that furnishes a floor plan with real store products and returns a shopping list with one total.
 
+- `app/` — the planner: 2D plan editor for a multi-room home, automatic furnishing per room against one home budget, 3D and walk views, shopping list. Plain JS, no build step; open `app/index.html` through any static server.
 - `interior-planner/` — browser prototype of the layout engine (room, style, budget → furnished 3D room + list). Test catalog, placeholder models.
 - `landing/` — early-access landing page for the ad test. Set `CHECKOUT_URL` in the script at the bottom of `landing/index.html`.
 
