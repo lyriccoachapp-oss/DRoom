@@ -7,3 +7,15 @@
 - `landing/` — early-access landing page for the ad test. Set `CHECKOUT_URL` in the script at the bottom of `landing/index.html`.
 
 Both pages are written as page fragments (no `<html>` wrapper) and load three.js / fonts from CDNs.
+
+## Develop
+
+```bash
+npm test
+```
+
+```bash
+npm run serve
+```
+
+`npm run serve` builds `dist/` and serves it at http://localhost:8080 (landing at `/`, planner at `/app/`). State of the project and the plan: `docs/ROADMAP.md`.

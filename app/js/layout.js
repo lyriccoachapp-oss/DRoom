@@ -50,11 +50,11 @@ function runLayout(r,want,forced){
   };
   function corner(cat,h,nearWindow){
     if(!want.has(cat))return;
-    const si=sizes(cat)[0],sz=dims(cat,si),k=sz[0]/2+0.08;
+    const si=sizes(cat)[0],sz=dims(cat,si),k=sz[0]/2+(cat==='shower'?0.01:0.08);
     const cs=[[k,k],[r.W-k,k],[k,r.D-k],[r.W-k,r.D-k]];
     const dist=c=>Math.hypot(c[0]-r.winRect.cx,c[1]-r.winRect.cz);
     cs.sort((a,b)=>nearWindow?dist(a)-dist(b):dist(b)-dist(a));
-    for(const c of cs){const rect={cx:c[0],cz:c[1],hx:sz[0]/2,hz:sz[1]/2,rot:0};if(fits(rect,h)){add(cat,si,rect);return;}}
+    for(const c of cs){const east=c[0]>r.W/2,south=c[1]>r.D/2,rect={cx:c[0],cz:c[1],hx:sz[0]/2,hz:sz[1]/2,rot:east?(south?Math.PI:-Math.PI/2):(south?Math.PI/2:0)};if(fits(rect,h)){add(cat,si,rect);return;}}
   }
   function byWalls(cat,walls,front){
     if(!want.has(cat))return;
@@ -112,6 +112,31 @@ function runLayout(r,want,forced){
     byWalls('dresser',sides.concat([OPP[hw],hw]),0.5);
     corner('lamp',0.5,false);
     corner('plant',0.5,true);
+  }
+  if(want.has('dtable')){ /* dining room: table in the middle, chairs along its long sides */
+    const bw=r.W>=r.D?'N':'W',L=wallLen(r,bw),A=acrossOf(r,bw);
+    let tb=null;
+    for(const si of sizes('dtable')){const sz=dims('dtable',si);if(L<sz[0]+1.5||A<sz[1]+1.9)continue;
+      const rect=at(r,bw,L/2,A/2,sz[0],sz[1]);if(fits(rect,sz[2])){tb=add('dtable',si,rect);break;}}
+    if(tb){
+      if(want.has('rug'))for(const si of sizes('rug')){const sz=dims('rug',si);if(sz[0]<=L-0.3&&sz[1]<=A-0.3&&sz[0]>=tb.w){add('rug',si,at(r,bw,L/2,A/2,sz[0],sz[1]),{flat:true});break;}}
+      if(want.has('dchair')){const si=sizes('dchair')[0],sz=dims('dchair',si),n=Math.max(2,Math.floor(tb.w/0.55)),off=tb.d/2+0.06+sz[1]/2;
+        for(let i=0;i<n;i++){const t=L/2-tb.w/2+tb.w*(i+0.5)/n;
+          [[A/2-off,ROT[bw]],[A/2+off,ROT[OPP[bw]]]].forEach(v=>{const rect=at(r,bw,t,v[0],sz[0],sz[1]);rect.rot=v[1];if(fits(rect,0.5))add('dchair',si,rect);});}}
+    }
+    byWalls('sideboard',all,0.5);
+    corner('lamp',0.5,false);corner('plant',0.5,true);
+  }
+  if(want.has('desk')){ /* office: desk against a wall away from the door, chair in front of it */
+    const order=all.slice().sort((a,b)=>(a===r.door.wall?1:0)-(b===r.door.wall?1:0));
+    byWalls('desk',order,1.0);
+    const dk=placed.find(p=>p.cat==='desk');
+    if(dk){
+      if(want.has('rug')&&(forced.rug==null||forced.rug===0)){const rs=dims('rug',0),rr=at(r,dk.wall,dk.t,dk.gap+dk.d+0.1+rs[1]/2,rs[0],rs[1]);if(inRoom(r,rr))add('rug',0,rr,{flat:true});}
+      if(want.has('ochair')){const si=sizes('ochair')[0],sz=dims('ochair',si),rect=at(r,dk.wall,dk.t,dk.gap+dk.d+0.08+sz[1]/2,sz[0],sz[1]);rect.rot=ROT[OPP[dk.wall]];if(fits(rect,0.5))add('ochair',si,rect);}
+    }
+    byWalls('shelf',order,0.45);
+    corner('lamp',0.5,false);corner('plant',0.5,true);
   }
   if(want.has('cabrun')){ /* kitchen: fridge, cabinet run and range in a line along one wall */
     const score=w=>{let s=wallLen(r,w)/10;if(r.win.wall!==w)s+=2;if(r.door.wall!==w)s+=2;return s;};

@@ -2,7 +2,7 @@
 /* App state, UI wiring and the shopping list. */
 (function () {
   const KEY = 'droom.home.v2';
-  const SIZE = { living: [4.8, 4.0], bedroom: [3.8, 3.6], kitchen: [3.8, 3.2], bathroom: [2.4, 2.2] };
+  const SIZE = { living: [4.8, 4.0], bedroom: [3.8, 3.6], kitchen: [3.8, 3.2], bathroom: [2.4, 2.2], dining: [4.0, 3.6], office: [3.2, 3.0] };
   let uid = 1;
   const newId = () => 'r' + Date.now().toString(36) + (uid++);
   function makeRoom(type, x, y, W, D) {
@@ -28,7 +28,8 @@
 
   const state = load() || defaults();
   UNITS.v = state.units === 'm' ? 'm' : 'ft';
-  let plans = [], sel = null, toast = '', has3d = false, sceneStale = true;
+  let plans = [], sel = null, toast = '', has3d = false, sceneStale = true, trace = null, clash = new Set();
+  const hist = []; let hi = -1, htimer = null;
   const room = () => state.rooms.find(r => r.id === state.roomId) || null;
   const planOf = id => plans.find(p => p.room.id === id);
 
@@ -38,6 +39,24 @@
     if (notes.length) toast = notes.join(' ');
     if (sel) { const p = planOf(sel.roomId); if (!p || !p.lines.some(l => l.cat === sel.cat)) sel = null; }
     if (!room() && state.rooms.length) state.roomId = state.rooms[0].id;
+    clash = new Set(); const names = [];
+    state.rooms.forEach((a, i) => state.rooms.slice(i + 1).forEach(b => {
+      if (Math.min(a.x + a.W, b.x + b.W) - Math.max(a.x, b.x) > 0.05 && Math.min(a.y + a.D, b.y + b.D) - Math.max(a.y, b.y) > 0.05) { clash.add(a.id); clash.add(b.id); names.push(a.name + ' and ' + b.name); }
+    }));
+    clashText = names.length ? 'Rooms overlap: ' + names.join('; ') + '. Move or resize one of them.' : '';
+  }
+  let clashText = '';
+  /* ---------- undo / redo ---------- */
+  const snapshot = () => JSON.stringify({ style: state.style, budget: state.budget, rooms: state.rooms });
+  function histButtons() { $('#btnUndo').disabled = hi <= 0; $('#btnRedo').disabled = hi >= hist.length - 1; }
+  function record() {
+    clearTimeout(htimer);
+    htimer = setTimeout(() => { const s = snapshot(); if (hist[hi] === s) return; hist.length = hi + 1; hist.push(s); if (hist.length > 80) hist.shift(); hi = hist.length - 1; histButtons(); }, 350);
+  }
+  function restore(i) {
+    if (i < 0 || i >= hist.length) return;
+    clearTimeout(htimer); hi = i; const s = JSON.parse(hist[i]);
+    state.style = s.style; state.budget = s.budget; state.rooms = s.rooms; sel = null; PlanEditor.refit(); update(true); histButtons();
   }
 
   /* ---------- rendering ---------- */
@@ -56,7 +75,7 @@
     const r = room(); $('#roomGrp').hidden = !r;
     if (r) {
       const nm = $('#inName'); if (document.activeElement !== nm) nm.value = r.name;
-      press($('#segType'), r.type);
+      $('#selType').value = r.type;
       $('#inW').value = r.W; $('#inD').value = r.D; $('#outW').textContent = fmtLen(r.W); $('#outD').textContent = fmtLen(r.D);
     }
     const area = state.rooms.reduce((s, x) => s + x.W * x.D, 0);
@@ -77,6 +96,7 @@
     const st = $('#status'); st.classList.toggle('over', over);
     st.textContent = !plans.length ? 'Add a room to get a list.' : over ? 'The minimum set is ' + money(total - state.budget) + ' over budget.' : 'Within budget. ' + money(state.budget - total) + ' left.';
     const t = $('#toast'); t.hidden = !toast; t.textContent = toast;
+    const cl = $('#clash'); cl.hidden = !clashText; cl.textContent = clashText;
     const box = $('#groups'); box.textContent = '';
     plans.forEach(p => {
       const r = p.room, g = el('div', 'rgroup'), head = el('div', 'rhead');
@@ -141,15 +161,16 @@
     if (state.view === 'plan') { sceneStale = true; return; }
     Scene3D.build(plans, state.style); Scene3D.setSelected(sel); sceneStale = false;
   }
-  function update() {
+  function update(skipHistory) {
     generateAll(); save(); renderSide(); renderList(); PlanEditor.render(); syncScene(); toast = '';
+    if (skipHistory !== true) record();
   }
 
   /* ---------- wiring ---------- */
   function seg(id, fn) { $(id).addEventListener('click', e => { const b = e.target.closest('button'); if (b) fn(b.dataset.v); }); }
   seg('#segStyle', v => { state.style = v; state.rooms.forEach(r => r.overrides = {}); update(); });
   seg('#segUnits', v => { state.units = UNITS.v = v; update(); });
-  seg('#segType', v => { const r = room(); if (!r || r.type === v) return; if (r.name === ROOMS[r.type].name) r.name = ROOMS[v].name; r.type = v; r.overrides = {}; r.removed = []; sel = null; update(); });
+  $('#selType').addEventListener('change', e => { const v = e.target.value, r = room(); if (!r || r.type === v) return; if (r.name === ROOMS[r.type].name) r.name = ROOMS[v].name; r.type = v; r.overrides = {}; r.removed = []; sel = null; update(); });
   seg('#segView', v => {
     state.view = v; save(); renderSide();
     if (v !== 'plan') { if (sceneStale) syncScene(); Scene3D.setView(v, planOf(state.roomId) || plans[0]); Scene3D.resize(); }
@@ -187,8 +208,30 @@
   /* ---------- boot ---------- */
   const fail = el('div', 'fail', '3D view is not available in this browser. The plan and the shopping list still work.'); fail.id = 'fail'; fail.hidden = true;
   $('#stage').appendChild(fail);
-  PlanEditor.init($('#plan'), () => ({ rooms: state.rooms, plans, roomId: state.roomId, sel }), update, id => { state.roomId = id; });
+  PlanEditor.init($('#plan'), () => ({ rooms: state.rooms, plans, roomId: state.roomId, sel, trace, clash }), () => update(), id => { state.roomId = id; });
+  $('#btnUndo').addEventListener('click', () => restore(hi - 1));
+  $('#btnRedo').addEventListener('click', () => restore(hi + 1));
+  window.addEventListener('keydown', e => {
+    if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'z') return;
+    const t = e.target.tagName; if (t === 'INPUT' || t === 'SELECT' || t === 'TEXTAREA') return;
+    e.preventDefault(); restore(e.shiftKey ? hi + 1 : hi - 1);
+  });
+  /* floor plan image to trace over; kept in memory only */
+  function traceUi() {
+    $('#traceCtl').hidden = !trace; if (!trace) return;
+    $('#inTraceW').value = trace.width; $('#outTraceW').textContent = fmtLen(trace.width);
+    $('#inTraceO').value = trace.opacity; $('#outTraceO').textContent = Math.round(trace.opacity * 100) + '%';
+  }
+  $('#inTrace').addEventListener('change', e => {
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => { const img = new Image(); img.onload = () => { trace = { src: rd.result, aspect: img.width / img.height || 1, width: 12, opacity: 0.5 }; PlanEditor.refit(); traceUi(); PlanEditor.render(); }; img.src = rd.result; };
+    rd.readAsDataURL(f);
+  });
+  $('#inTraceW').addEventListener('input', e => { if (trace) { trace.width = parseFloat(e.target.value); PlanEditor.refit(); traceUi(); PlanEditor.render(); } });
+  $('#inTraceO').addEventListener('input', e => { if (trace) { trace.opacity = parseFloat(e.target.value); traceUi(); PlanEditor.render(); } });
+  $('#btnTraceOff').addEventListener('click', () => { trace = null; $('#inTrace').value = ''; PlanEditor.refit(); traceUi(); PlanEditor.render(); });
   has3d = Scene3D.init($('#cv'), $('#stage'), s => select(s, true));
-  update();
+  update(true); hist.push(snapshot()); hi = 0; histButtons();
   if (state.view !== 'plan') { Scene3D.setView(state.view, planOf(state.roomId) || plans[0]); Scene3D.resize(); }
 })();

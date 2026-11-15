@@ -133,3 +133,13 @@ function tileTexture(color){
   const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.encoding=THREE.sRGBEncoding;t.anisotropy=4;
   return tileTex[color]=t;
 }
+
+/* Dining room and office models. */
+BUILD.dtable=function(g,it){const w=it.w,d=it.d,h=it.h,top=M(it.c2,.6),leg=it.style==='loft'?M(it.c3,.5):top;B(g,w,0.045,d,top,0,h-0.045,0);legs(g,w-0.1,d-0.1,h-0.045,leg,0.06);};
+BUILD.dchair=function(g,it){const w=it.w,d=it.d,m=M(it.c2,.7),f=M(it.c1,.95);legs(g,w,d,0.44,m,0.035);B(g,w,0.05,d,f,0,0.44,0);B(g,w,0.42,0.04,m,0,0.49,-d/2+0.02);};
+BUILD.sideboard=BUILD.dresser;
+BUILD.desk=function(g,it){const w=it.w,d=it.d,h=it.h,top=M(it.c2,.6),side=it.style==='loft'?M(it.c3,.5):M(shade(it.c2,-0.15),.7);
+  B(g,w,0.04,d,top,0,h-0.04,0);B(g,0.04,h-0.04,d-0.06,side,-w/2+0.04,0,0);B(g,0.4,h-0.1,d-0.08,side,w/2-0.22,0.06,0);
+  for(let i=1;i<3;i++)B(g,0.36,0.008,0.006,M(shade(it.c2,-0.35),.7),w/2-0.22,0.06+(h-0.1)*i/3,d/2-0.04);};
+BUILD.ochair=function(g,it){const m=M(0x26282c,.6),f=M(it.c1,.95);
+  Cy(g,0.28,0.28,0.03,m,0,0,0);Cy(g,0.03,0.03,0.4,m,0,0.03,0);B(g,0.5,0.08,0.48,f,0,0.43,0);B(g,0.46,0.5,0.06,f,0,0.52,-0.22);};

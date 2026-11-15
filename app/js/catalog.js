@@ -43,6 +43,12 @@ const CATS = {
   nightstand: { name: 'Nightstand', base: 85, sizes: [[0.45, 0.4, 0.5, '', 1]] },
   wardrobe: { name: 'Wardrobe', base: 390, sizes: [[1.2, 0.6, 2.1, '2-door', 1], [1.6, 0.6, 2.1, '3-door', 1.3], [2.0, 0.6, 2.1, '4-door', 1.6]] },
   dresser: { name: 'Dresser', base: 230, sizes: [[1.0, 0.45, 0.85, '', 1]] },
+  /* dining room and office */
+  dtable: { name: 'Dining table', base: 380, sizes: [[1.6, 0.9, 0.75, '4-seat', 1], [2.0, 1.0, 0.75, '6-seat', 1.3]] },
+  dchair: { name: 'Dining chair', base: 75, sizes: [[0.45, 0.5, 0.9, '', 1]] },
+  sideboard: { name: 'Sideboard', base: 310, sizes: [[1.6, 0.45, 0.8, '', 1]] },
+  desk: { name: 'Desk', base: 240, sizes: [[1.4, 0.7, 0.75, '55 in', 1], [1.6, 0.75, 0.75, '63 in', 1.2]] },
+  ochair: { name: 'Office chair', base: 150, sizes: [[0.6, 0.6, 1.0, '', 1]] },
   /* kitchen */
   cabrun: { name: 'Base cabinets with countertop and sink', base: 900, sizes: [[1.8, 0.62, 0.9, '6 ft run', 1], [2.4, 0.62, 0.9, '8 ft run', 1.3], [3.0, 0.62, 0.9, '10 ft run', 1.6], [3.6, 0.62, 0.9, '12 ft run', 1.9]] },
   uppers: { name: 'Wall cabinets', base: 420, sizes: [[1.8, 0.35, 0.75, '6 ft run', 1], [2.4, 0.35, 0.75, '8 ft run', 1.3], [3.0, 0.35, 0.75, '10 ft run', 1.6], [3.6, 0.35, 0.75, '12 ft run', 1.9]] },
@@ -65,7 +71,9 @@ const ROOMS = {
   living: { name: 'Living room', weight: 1, all: ['sofa', 'tvstand', 'coffee', 'floor', 'rug', 'armchair', 'shelf', 'lamp', 'plant'], required: ['sofa', 'tvstand', 'coffee'] },
   bedroom: { name: 'Bedroom', weight: 0.85, all: ['bed', 'wardrobe', 'floor', 'nightstand', 'rug', 'dresser', 'lamp', 'plant'], required: ['bed', 'wardrobe'] },
   kitchen: { name: 'Kitchen', weight: 1.3, all: ['cabrun', 'range', 'fridge', 'tile', 'uppers', 'island'], required: ['cabrun', 'range', 'fridge'] },
-  bathroom: { name: 'Bathroom', weight: 0.6, all: ['vanity', 'toilet', 'tub', 'shower', 'tile', 'bathcab'], required: ['vanity', 'toilet'] }
+  bathroom: { name: 'Bathroom', weight: 0.6, all: ['vanity', 'toilet', 'tub', 'shower', 'tile', 'bathcab'], required: ['vanity', 'toilet'] },
+  dining: { name: 'Dining room', weight: 0.7, all: ['dtable', 'dchair', 'floor', 'sideboard', 'rug', 'lamp', 'plant'], required: ['dtable', 'dchair'] },
+  office: { name: 'Office', weight: 0.6, all: ['desk', 'ochair', 'floor', 'shelf', 'rug', 'lamp', 'plant'], required: ['desk', 'ochair'] }
 };
 const CATALOG = [], BYID = {};
 const idOf = (cat, style, tier, si) => cat + '-' + style + '-' + tier + '-' + si;
@@ -80,7 +88,7 @@ for (const cat in CATS) {
           name: C.name + ' “' + S.series[tier] + '”' + (sz[3] ? ', ' + sz[3] : ''), price, supplier: S.supplier,
           c1: cat === 'rug' ? S.rug[tier] : S.fabric[tier], c2: S.wood[tier], c3: S.metal };
         if (C.area) it.c1 = parseInt(S.floor[tier].slice(1), 16);
-        it.swatch = C.area ? it.c1 : (cat === 'toilet' || cat === 'tub' || cat === 'shower') ? CERAMIC : (cat === 'fridge' || cat === 'range') ? STEEL : (cat === 'sofa' || cat === 'armchair' || cat === 'rug' || cat === 'bed') ? it.c1 : (cat === 'plant' ? 0x4f7f4a : (cat === 'lamp' ? it.c3 : it.c2));
+        it.swatch = C.area ? it.c1 : (cat === 'toilet' || cat === 'tub' || cat === 'shower') ? CERAMIC : (cat === 'fridge' || cat === 'range') ? STEEL : (cat === 'sofa' || cat === 'armchair' || cat === 'rug' || cat === 'bed' || cat === 'dchair' || cat === 'ochair') ? it.c1 : (cat === 'plant' ? 0x4f7f4a : (cat === 'lamp' ? it.c3 : it.c2));
         CATALOG.push(it); BYID[it.id] = it;
       });
     }

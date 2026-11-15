@@ -23,7 +23,9 @@ const PlanEditor = (function () {
   }
   function fit(rooms) {
     let x0 = 0, y0 = 0, x1 = 6, y1 = 4;
-    if (rooms.length) { x0 = y0 = Infinity; x1 = y1 = -Infinity; rooms.forEach(o => { x0 = Math.min(x0, o.x); y0 = Math.min(y0, o.y); x1 = Math.max(x1, o.x + o.W); y1 = Math.max(y1, o.y + o.D); }); }
+    const tr = get().trace;
+    if (rooms.length || tr) { x0 = y0 = Infinity; x1 = y1 = -Infinity; rooms.forEach(o => { x0 = Math.min(x0, o.x); y0 = Math.min(y0, o.y); x1 = Math.max(x1, o.x + o.W); y1 = Math.max(y1, o.y + o.D); }); }
+    if (tr) { x0 = Math.min(x0, 0); y0 = Math.min(y0, 0); x1 = Math.max(x1, tr.width); y1 = Math.max(y1, tr.width / tr.aspect); }
     const pad = 1.4;
     svg.setAttribute('viewBox', [(x0 - pad) * S, (y0 - pad) * S, (x1 - x0 + pad * 2) * S, (y1 - y0 + pad * 2) * S].join(' '));
     fitted = true;
@@ -41,9 +43,10 @@ const PlanEditor = (function () {
     el('path', { d: 'M ' + S + ' 0 L 0 0 0 ' + S, class: 'gridline' }, pat);
     const vb = svg.getAttribute('viewBox').split(' ').map(Number);
     el('rect', { x: vb[0], y: vb[1], width: vb[2], height: vb[3], fill: 'url(#grid)' }, svg);
+    if (st.trace) el('image', { href: st.trace.src, x: 0, y: 0, width: st.trace.width * S, height: st.trace.width / st.trace.aspect * S, opacity: st.trace.opacity, preserveAspectRatio: 'none', 'pointer-events': 'none' }, svg);
     if (!st.rooms.length) { el('text', { x: vb[0] + vb[2] / 2, y: vb[1] + vb[3] / 2, class: 'hintText', 'text-anchor': 'middle' }, svg, 'Add a room to start'); return; }
     st.rooms.forEach((o, i) => {
-      const pl = st.plans[i], on = o.id === st.roomId, g = el('g', { class: 'rm' + (on ? ' on' : '') }, svg);
+      const pl = st.plans[i], on = o.id === st.roomId, g = el('g', { class: 'rm' + (on ? ' on' : '') + (st.clash && st.clash.has(o.id) ? ' clash' : '') }, svg);
       el('rect', { x: o.x * S, y: o.y * S, width: o.W * S, height: o.D * S, class: 'room', 'data-act': 'move', 'data-room': o.id }, g);
       if (pl) pl.placed.filter(q => q.cat !== 'uppers').forEach(q => el('rect', { x: (o.x + q.cx - q.hx) * S, y: (o.y + q.cz - q.hz) * S, width: q.hx * 2 * S, height: q.hz * 2 * S, rx: 6, class: 'furn' + (q.flat ? ' rug' : '') + (st.sel && st.sel.roomId === o.id && st.sel.cat === q.cat ? ' sel' : '') }, g));
       if (pl) {

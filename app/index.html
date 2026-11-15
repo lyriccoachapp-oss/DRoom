@@ -38,6 +38,12 @@ button{cursor:pointer}
 .brand b{color:var(--accent)}
 .logo{width:24px; height:24px; border:3px solid var(--ink); border-radius:6px; position:relative}
 .logo::after{content:""; position:absolute; left:4px; right:4px; bottom:-3px; height:9px; background:var(--accent); border-radius:2px 2px 0 0}
+.hist{margin-left:auto; display:flex; gap:8px}
+.hist .btn{padding:6px 12px; background:var(--panel)}
+.btn:disabled{opacity:.45; cursor:default}
+.row select{flex:1; min-width:0; background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:6px 9px}
+input[type=file]{max-width:100%; font-size:13px}
+.rm.clash .room{stroke:var(--warn)}
 .tag{font-size:12px; color:var(--muted); border:1px solid var(--line); border-radius:999px; padding:2px 10px}
 
 .work{flex:1; min-height:0; display:grid; grid-template-columns:292px minmax(0,1fr) 352px; gap:12px}
@@ -144,6 +150,7 @@ button{cursor:pointer}
 <header class="top">
   <h1 class="brand"><span class="logo"></span><span><b>D</b>Room</span></h1>
   <span class="tag">preview · sample catalog, sample prices</span>
+  <span class="hist"><button type="button" class="btn" id="btnUndo" disabled>Undo</button><button type="button" class="btn" id="btnRedo" disabled>Redo</button></span>
 </header>
 
 <main class="work">
@@ -171,20 +178,27 @@ button{cursor:pointer}
           <button type="button" class="btn" data-add="bedroom">+ Bedroom</button>
           <button type="button" class="btn" data-add="kitchen">+ Kitchen</button>
           <button type="button" class="btn" data-add="bathroom">+ Bathroom</button>
+          <button type="button" class="btn" data-add="dining">+ Dining</button>
+          <button type="button" class="btn" data-add="office">+ Office</button>
         </div>
       </div>
       <div class="grp" id="roomGrp">
         <h2>Selected room</h2>
         <div class="row"><label for="inName">Name</label><input id="inName" type="text" maxlength="24" autocomplete="off"></div>
-        <div class="seg" id="segType">
-          <button type="button" data-v="living">Living</button>
-          <button type="button" data-v="bedroom">Bed</button>
-          <button type="button" data-v="kitchen">Kitchen</button>
-          <button type="button" data-v="bathroom">Bath</button>
-        </div>
+        <div class="row"><label for="selType">Type</label><select id="selType"><option value="living">Living room</option><option value="bedroom">Bedroom</option><option value="kitchen">Kitchen</option><option value="bathroom">Bathroom</option><option value="dining">Dining room</option><option value="office">Office</option></select></div>
         <div class="row"><label for="inW">Width</label><input id="inW" type="range" min="1.6" max="9" step="0.1"><output id="outW" class="num"></output></div>
         <div class="row"><label for="inD">Depth</label><input id="inD" type="range" min="1.6" max="9" step="0.1"><output id="outD" class="num"></output></div>
         <button type="button" class="btn danger" id="delRoom">Delete room</button>
+      </div>
+      <div class="grp">
+        <h2>Trace a floor plan</h2>
+        <input id="inTrace" type="file" accept="image/*" aria-label="Floor plan image">
+        <div id="traceCtl" class="grp" hidden>
+          <div class="row"><label for="inTraceW">Width</label><input id="inTraceW" type="range" min="3" max="40" step="0.1"><output id="outTraceW" class="num"></output></div>
+          <div class="row"><label for="inTraceO">Fade</label><input id="inTraceO" type="range" min="0.1" max="1" step="0.05"><output id="outTraceO" class="num"></output></div>
+          <button type="button" class="btn" id="btnTraceOff">Remove image</button>
+        </div>
+        <p class="note">Load a picture of your plan, set its real width, then place rooms over it. Images only. The picture stays on this device and is not saved with the project.</p>
       </div>
       <button type="button" class="btn" id="btnReset">Redo the whole design</button>
       <p class="note">In Plan view, drag a room to move it, the orange corner to resize it, and the round markers to move its door and window.</p>
@@ -219,6 +233,7 @@ button{cursor:pointer}
         </div>
       </div>
       <p class="toast" id="toast" hidden></p>
+      <p class="toast" id="clash" hidden></p>
       <div id="groups" class="grp"></div>
       <button type="button" class="btn" id="btnCopy">Copy list</button>
       <p class="note">Tap an item here or in the 3D view to swap it. The rest of the room rebalances to stay in budget.</p>
