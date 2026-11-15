@@ -265,9 +265,13 @@ function runLayout(r,want,forced){
 
 /* Furnish one room: lay it out, then pick price tiers so the total fits the budget.
    Returns {room, r, placed, lines, excluded, total, budget, notes}. */
+/* Paint for the walls: two coats over the wall area less the door and window. */
+function paintGallons(r){const wall=2*(r.W+r.D)*2.7-r.door.width*2.05-1.4*1.3;return Math.max(1,Math.ceil(wall*2/37-0.05));}
 function planRoom(room,style,budget,notes){
   notes=notes||[];
-  const r=roomGeom(room),spec=ROOMS[room.type];
+  const r=roomGeom(room),spec0=ROOMS[room.type],paint=/^#[0-9a-f]{6}$/i.test(room.wallColor||'');
+  /* A chosen wall colour adds paint to the room, as a required line. */
+  const spec={all:spec0.all.concat(paint?['paint']:[]),required:spec0.required.concat(paint?['paint']:[])};
   const forced={};
   for(const c in room.overrides){const it=BYID[room.overrides[c]];if(it&&spec.all.includes(c))forced[c]=it.si;else delete room.overrides[c];}
   const want=new Set(spec.all.filter(c=>!room.removed.includes(c)));
@@ -276,12 +280,12 @@ function planRoom(room,style,budget,notes){
     notes.push(BYID[room.overrides[c]].name+' does not fit in '+room.name+'. A different size was chosen.');
     delete room.overrides[c];return planRoom(room,style,budget,notes);}}
   const area=Math.ceil(r.area*1.1*10)/10;
-  const has=c=>CATS[c].area||placed.some(p=>p.cat===c);
+  const has=c=>CATS[c].area||CATS[c].unit||placed.some(p=>p.cat===c);
   const excluded=[];
   spec.all.forEach(c=>{if(room.removed.includes(c))excluded.push({cat:c,reason:'removed'});else if(!has(c)&&!(c==='shower'&&has('tub')))excluded.push({cat:c,reason:'space'});});
   let active=spec.all.filter(c=>has(c)&&!room.removed.includes(c));
-  const qty=c=>CATS[c].area?area:placed.filter(p=>p.cat===c).length;
-  const si=c=>CATS[c].area?0:placed.find(p=>p.cat===c).si;
+  const qty=c=>CATS[c].unit?paintGallons(r):CATS[c].area?area:placed.filter(p=>p.cat===c).length;
+  const si=c=>CATS[c].area||CATS[c].unit?0:placed.find(p=>p.cat===c).si;
   const tier={};active.forEach(c=>tier[c]=0);
   const itemOf=c=>room.overrides[c]?BYID[room.overrides[c]]:BYID[idOf(c,style,tier[c],si(c))];
   const total=()=>active.reduce((s,c)=>s+itemOf(c).price*qty(c),0);
@@ -294,14 +298,14 @@ function planRoom(room,style,budget,notes){
   while(changed){changed=false;
     for(const c of active){if(room.overrides[c]||tier[c]>=2)continue;tier[c]++;if(total()>budget)tier[c]--;else changed=true;}}
   placed=placed.filter(p=>active.includes(p.cat));
-  const lines=active.map(c=>({cat:c,item:itemOf(c),qty:qty(c),area:!!CATS[c].area}));
+  const lines=active.map(c=>({cat:c,item:itemOf(c),qty:qty(c),area:!!CATS[c].area,unit:CATS[c].unit||null}));
   return {room,r,placed,lines,excluded,total:total(),budget,notes};
 }
 /* Would size `si` of this category fit, keeping every other placed item at its current size? */
 function canFit(plan,cat,si){
-  if(CATS[cat].area)return true;
-  const forced={};plan.lines.forEach(l=>{if(!l.area)forced[l.cat]=l.item.si;});forced[cat]=si;
-  const want=new Set(plan.lines.filter(l=>!l.area).map(l=>l.cat));
+  if(CATS[cat].area||CATS[cat].unit)return true;
+  const forced={};plan.lines.forEach(l=>{if(!l.area&&!l.unit)forced[l.cat]=l.item.si;});forced[cat]=si;
+  const want=new Set(plan.lines.filter(l=>!l.area&&!l.unit).map(l=>l.cat));
   return runLayout(plan.r,want,forced).some(p=>p.cat===cat);
 }
 

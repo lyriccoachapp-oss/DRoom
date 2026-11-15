@@ -84,6 +84,18 @@
       const nm = $('#inName'); if (document.activeElement !== nm) nm.value = r.name;
       $('#selType').value = r.type;
       $('#selShape').value = cutOf(r) ? r.cut.corner : '';
+      const pb = $('#paints'); pb.textContent = '';
+      const cur = (r.wallColor || '').toUpperCase(), mk = (title, color) => {
+        const b = el('button', color ? '' : 'nopaint'); b.type = 'button'; b.title = title; b.setAttribute('aria-label', title);
+        if (color) b.style.background = color; b.setAttribute('aria-pressed', (color || '') === cur ? 'true' : 'false');
+        b.addEventListener('click', () => { if (color) r.wallColor = color; else delete r.wallColor; update(); }); pb.appendChild(b);
+      };
+      mk('Keep the style colour, no paint', null); PAINTS.forEach(p => mk(p[0], p[1]));
+      const lab = el('label'); lab.title = 'Pick any colour'; const ci = el('input'); ci.type = 'color'; ci.setAttribute('aria-label', 'Pick any wall colour');
+      ci.value = /^#[0-9A-F]{6}$/.test(cur) ? cur.toLowerCase() : '#d4cbbe';
+      ci.addEventListener('change', e => { r.wallColor = e.target.value.toUpperCase(); update(); });
+      if (cur && !PAINTS.some(p => p[1] === cur)) lab.style.boxShadow = '0 0 0 2px var(--panel), 0 0 0 4px var(--accent)';
+      lab.appendChild(ci); pb.appendChild(lab);
       const dd = doorOf(r), ws = $('#selDoorW');
       $('#selDoor').value = dd.type;
       Array.from(ws.options).forEach(op => { const v = parseFloat(op.value); op.textContent = UNITS.v === 'm' ? Math.round(v * 100) + ' cm' : Math.round(v / 0.0254) + ' in'; });
@@ -126,8 +138,8 @@
       p.lines.forEach(l => {
         const it = l.item, on = sel && sel.roomId === r.id && sel.cat === l.cat, li = el('li', 'item' + (on ? ' sel' : ''));
         const hd = el('button', 'item-head'); hd.type = 'button'; hd.setAttribute('aria-expanded', on ? 'true' : 'false');
-        const sw = el('span', 'sw'); sw.style.background = hex(it.swatch);
-        const mid = el('span'); mid.append(el('div', 'nm', it.name + (l.area ? ', ' + fmtArea(l.qty) : l.qty > 1 ? ' × ' + l.qty : '')), el('div', 'meta num', fmtDims(it)));
+        const sw = el('span', 'sw'); sw.style.background = l.unit && r.wallColor ? r.wallColor : hex(it.swatch);
+        const mid = el('span'); mid.append(el('div', 'nm', it.name + (l.unit ? ', ' + l.qty + ' ' + l.unit : l.area ? ', ' + fmtArea(l.qty) : l.qty > 1 ? ' × ' + l.qty : '')), el('div', 'meta num', fmtDims(it)));
         const pr = el('span', 'pr num', money(it.price * l.qty)); pr.appendChild(el('small', '', STYLES[it.style].name + ' · ' + TIERS[it.tier].name));
         hd.append(sw, mid, pr); hd.addEventListener('click', () => select(on ? null : { roomId: r.id, cat: l.cat })); li.appendChild(hd);
         if (on) li.appendChild(altsFor(p, l));
@@ -184,7 +196,7 @@
     card.hidden = !(cardOpen && l && state.view !== 'plan');
     if (card.hidden) return;
     const it = l.item;
-    $('#icName').textContent = it.name + (l.area ? ', ' + fmtArea(l.qty) : l.qty > 1 ? ' \u00d7 ' + l.qty : '');
+    $('#icName').textContent = it.name + (l.unit ? ', ' + l.qty + ' ' + l.unit : l.area ? ', ' + fmtArea(l.qty) : l.qty > 1 ? ' \u00d7 ' + l.qty : '');
     $('#icMeta').textContent = p.room.name + ' \u00b7 ' + fmtDims(it);
     $('#icPrice').textContent = money(it.price * l.qty);
     $('#icClose').textContent = state.view === 'walk' ? 'Back to walking' : 'Close';
@@ -249,7 +261,7 @@
     const lines = ['DRoom shopping list, ' + STYLES[state.style].name + ' style'];
     plans.forEach(p => {
       lines.push('', p.room.name + ' (' + fmtLen(p.room.W) + ' × ' + fmtLen(p.room.D) + ')');
-      p.lines.forEach(l => lines.push('- ' + l.item.name + (l.area ? ', ' + fmtArea(l.qty) : l.qty > 1 ? ' × ' + l.qty : '') + ', ' + fmtDims(l.item) + ', ' + money(l.item.price * l.qty)));
+      p.lines.forEach(l => lines.push('- ' + l.item.name + (l.unit ? ', ' + l.qty + ' ' + l.unit : l.area ? ', ' + fmtArea(l.qty) : l.qty > 1 ? ' × ' + l.qty : '') + ', ' + fmtDims(l.item) + ', ' + money(l.item.price * l.qty)));
     });
     lines.push('', 'Total: ' + money(plans.reduce((s, p) => s + p.total, 0)) + ' (budget ' + money(state.budget) + ')');
     const b = $('#btnCopy'), done = ok => { b.textContent = ok ? 'Copied' : 'Copy failed'; setTimeout(() => b.textContent = 'Copy list', 1600); };
