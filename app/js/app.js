@@ -1,16 +1,17 @@
 'use strict';
 /* App state, UI wiring and the shopping list. */
 (function () {
-  const KEY = 'droom.home.v1';
+  const KEY = 'droom.home.v2';
+  const SIZE = { living: [4.8, 4.0], bedroom: [3.8, 3.6], kitchen: [3.8, 3.2], bathroom: [2.4, 2.2] };
   let uid = 1;
   const newId = () => 'r' + Date.now().toString(36) + (uid++);
   function makeRoom(type, x, y, W, D) {
     return { id: newId(), name: ROOMS[type].name, type, x, y, W, D, doorWall: 'S', doorPos: 0.82, winWall: 'N', winPos: 0.5, overrides: {}, removed: [] };
   }
   function defaults() {
-    const a = makeRoom('living', 0, 0, 5.4, 4.2), b = makeRoom('bedroom', 5.4, 0, 4.0, 3.6);
-    b.doorPos = 0.2;
-    return { style: 'scandi', budget: 9000, units: 'ft', rooms: [a, b], roomId: a.id, view: 'plan' };
+    const a = makeRoom('living', 0, 0, 5.4, 4.2), b = makeRoom('bedroom', 5.4, 0, 4.0, 3.6), k = makeRoom('kitchen', 0, 4.2, 3.8, 3.2), t = makeRoom('bathroom', 5.4, 3.6, 2.4, 2.2);
+    b.doorPos = 0.2; k.doorWall = 'N'; k.winWall = 'S'; t.doorWall = 'W'; t.doorPos = 0.7; t.winWall = 'E';
+    return { style: 'scandi', budget: 20000, units: 'ft', rooms: [a, b, k, t], roomId: a.id, view: 'plan' };
   }
   function load() {
     try {
@@ -86,7 +87,7 @@
         const it = l.item, on = sel && sel.roomId === r.id && sel.cat === l.cat, li = el('li', 'item' + (on ? ' sel' : ''));
         const hd = el('button', 'item-head'); hd.type = 'button'; hd.setAttribute('aria-expanded', on ? 'true' : 'false');
         const sw = el('span', 'sw'); sw.style.background = hex(it.swatch);
-        const mid = el('span'); mid.append(el('div', 'nm', it.name + (l.qty > 1 ? ' × ' + l.qty : '')), el('div', 'meta num', fmtDims(it)));
+        const mid = el('span'); mid.append(el('div', 'nm', it.name + (l.area ? ', ' + fmtArea(l.qty) : l.qty > 1 ? ' × ' + l.qty : '')), el('div', 'meta num', fmtDims(it)));
         const pr = el('span', 'pr num', money(it.price * l.qty)); pr.appendChild(el('small', '', STYLES[it.style].name + ' · ' + TIERS[it.tier].name));
         hd.append(sw, mid, pr); hd.addEventListener('click', () => select(on ? null : { roomId: r.id, cat: l.cat })); li.appendChild(hd);
         if (on) li.appendChild(altsFor(p, l));
@@ -160,19 +161,18 @@
   function addRoom(type) {
     const x = state.rooms.length ? Math.max.apply(null, state.rooms.map(r => r.x + r.W)) : 0;
     const y = state.rooms.length ? Math.min.apply(null, state.rooms.map(r => r.y)) : 0;
-    const r = type === 'living' ? makeRoom(type, x, y, 4.8, 4.0) : makeRoom(type, x, y, 3.8, 3.6);
+    const r = makeRoom(type, x, y, SIZE[type][0], SIZE[type][1]);
     const n = state.rooms.filter(o => o.type === type).length; if (n) r.name = ROOMS[type].name + ' ' + (n + 1);
     state.rooms.push(r); state.roomId = r.id; PlanEditor.refit(); update();
   }
-  $('#addLiving').addEventListener('click', () => addRoom('living'));
-  $('#addBedroom').addEventListener('click', () => addRoom('bedroom'));
+  $('#addRow').addEventListener('click', e => { const b = e.target.closest('[data-add]'); if (b) addRoom(b.dataset.add); });
   $('#delRoom').addEventListener('click', () => { state.rooms = state.rooms.filter(r => r.id !== state.roomId); state.roomId = state.rooms.length ? state.rooms[0].id : null; sel = null; PlanEditor.refit(); update(); });
   $('#btnReset').addEventListener('click', () => { state.rooms.forEach(r => { r.overrides = {}; r.removed = []; }); sel = null; update(); });
   $('#btnCopy').addEventListener('click', () => {
     const lines = ['DRoom shopping list, ' + STYLES[state.style].name + ' style'];
     plans.forEach(p => {
       lines.push('', p.room.name + ' (' + fmtLen(p.room.W) + ' × ' + fmtLen(p.room.D) + ')');
-      p.lines.forEach(l => lines.push('- ' + l.item.name + (l.qty > 1 ? ' × ' + l.qty : '') + ', ' + fmtDims(l.item) + ', ' + money(l.item.price * l.qty)));
+      p.lines.forEach(l => lines.push('- ' + l.item.name + (l.area ? ', ' + fmtArea(l.qty) : l.qty > 1 ? ' × ' + l.qty : '') + ', ' + fmtDims(l.item) + ', ' + money(l.item.price * l.qty)));
     });
     lines.push('', 'Total: ' + money(plans.reduce((s, p) => s + p.total, 0)) + ' (budget ' + money(state.budget) + ')');
     const b = $('#btnCopy'), done = ok => { b.textContent = ok ? 'Copied' : 'Copy failed'; setTimeout(() => b.textContent = 'Copy list', 1600); };

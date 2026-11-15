@@ -11,6 +11,7 @@ function fmtLen(m) {
   return ft + '′' + (inch ? inch + '″' : '');
 }
 function fmtDims(it) {
+  if (CATS[it.cat].area) return UNITS.v === 'm' ? money(it.price) + ' / m\u00b2' : '$' + (it.price / 10.7639).toFixed(2) + ' / ft\u00b2';
   const f = UNITS.v === 'm' ? v => Math.round(v * 100) : v => Math.round(v / 0.0254), u = UNITS.v === 'm' ? ' cm' : ' in';
   return it.cat === 'rug' ? f(it.d) + ' × ' + f(it.w) + u : f(it.w) + ' × ' + f(it.d) + ' × ' + f(it.h) + u;
 }
@@ -41,12 +42,30 @@ const CATS = {
   bed: { name: 'Bed', base: 480, sizes: [[1.5, 2.1, 1.0, 'Full', 1], [1.7, 2.1, 1.0, 'Queen', 1.15], [1.9, 2.1, 1.0, 'King', 1.3]] },
   nightstand: { name: 'Nightstand', base: 85, sizes: [[0.45, 0.4, 0.5, '', 1]] },
   wardrobe: { name: 'Wardrobe', base: 390, sizes: [[1.2, 0.6, 2.1, '2-door', 1], [1.6, 0.6, 2.1, '3-door', 1.3], [2.0, 0.6, 2.1, '4-door', 1.6]] },
-  dresser: { name: 'Dresser', base: 230, sizes: [[1.0, 0.45, 0.85, '', 1]] }
+  dresser: { name: 'Dresser', base: 230, sizes: [[1.0, 0.45, 0.85, '', 1]] },
+  /* kitchen */
+  cabrun: { name: 'Base cabinets with countertop and sink', base: 900, sizes: [[1.8, 0.62, 0.9, '6 ft run', 1], [2.4, 0.62, 0.9, '8 ft run', 1.3], [3.0, 0.62, 0.9, '10 ft run', 1.6], [3.6, 0.62, 0.9, '12 ft run', 1.9]] },
+  uppers: { name: 'Wall cabinets', base: 420, sizes: [[1.8, 0.35, 0.75, '6 ft run', 1], [2.4, 0.35, 0.75, '8 ft run', 1.3], [3.0, 0.35, 0.75, '10 ft run', 1.6], [3.6, 0.35, 0.75, '12 ft run', 1.9]] },
+  range: { name: 'Range', base: 650, sizes: [[0.76, 0.65, 0.92, '', 1]] },
+  fridge: { name: 'Refrigerator', base: 900, sizes: [[0.9, 0.75, 1.78, '', 1]] },
+  island: { name: 'Kitchen island', base: 700, sizes: [[1.6, 0.9, 0.9, '', 1]] },
+  /* bathroom */
+  vanity: { name: 'Vanity with sink', base: 320, sizes: [[0.6, 0.5, 0.85, '24 in', 1], [0.9, 0.5, 0.85, '36 in', 1.3], [1.2, 0.5, 0.85, '48 in', 1.6]] },
+  toilet: { name: 'Toilet', base: 210, sizes: [[0.4, 0.7, 0.78, '', 1]] },
+  tub: { name: 'Bathtub', base: 480, sizes: [[1.5, 0.75, 0.55, '60 in', 1], [1.7, 0.8, 0.55, '66 in', 1.2]] },
+  shower: { name: 'Shower enclosure', base: 620, sizes: [[0.9, 0.9, 2.0, '', 1]] },
+  bathcab: { name: 'Linen cabinet', base: 180, sizes: [[0.4, 0.35, 1.8, '', 1]] },
+  /* finishes, priced per square metre of floor (10% waste added to the quantity) */
+  floor: { name: 'Plank flooring', base: 38, area: true, sizes: [[0, 0, 0, '', 1]] },
+  tile: { name: 'Floor tile', base: 46, area: true, sizes: [[0, 0, 0, '', 1]] }
 };
+const CERAMIC = 0xf4f4f1, STEEL = 0xb9bdc2;
 /* `all` is in priority order. Optional items are dropped from the end when the budget is short. `weight` splits the home budget. */
 const ROOMS = {
-  living: { name: 'Living room', weight: 1, all: ['sofa', 'tvstand', 'coffee', 'rug', 'armchair', 'shelf', 'lamp', 'plant'], required: ['sofa', 'tvstand', 'coffee'] },
-  bedroom: { name: 'Bedroom', weight: 0.85, all: ['bed', 'wardrobe', 'nightstand', 'rug', 'dresser', 'lamp', 'plant'], required: ['bed', 'wardrobe'] }
+  living: { name: 'Living room', weight: 1, all: ['sofa', 'tvstand', 'coffee', 'floor', 'rug', 'armchair', 'shelf', 'lamp', 'plant'], required: ['sofa', 'tvstand', 'coffee'] },
+  bedroom: { name: 'Bedroom', weight: 0.85, all: ['bed', 'wardrobe', 'floor', 'nightstand', 'rug', 'dresser', 'lamp', 'plant'], required: ['bed', 'wardrobe'] },
+  kitchen: { name: 'Kitchen', weight: 1.3, all: ['cabrun', 'range', 'fridge', 'tile', 'uppers', 'island'], required: ['cabrun', 'range', 'fridge'] },
+  bathroom: { name: 'Bathroom', weight: 0.6, all: ['vanity', 'toilet', 'tub', 'shower', 'tile', 'bathcab'], required: ['vanity', 'toilet'] }
 };
 const CATALOG = [], BYID = {};
 const idOf = (cat, style, tier, si) => cat + '-' + style + '-' + tier + '-' + si;
@@ -56,11 +75,12 @@ for (const cat in CATS) {
     const S = STYLES[style];
     for (let tier = 0; tier < 3; tier++) {
       C.sizes.forEach((sz, si) => {
-        const price = Math.round(C.base * sz[4] * TIERS[tier].mult * S.mult / 10) * 10 - 1;
+        const raw = C.base * sz[4] * TIERS[tier].mult * S.mult, price = C.area ? Math.round(raw) : Math.round(raw / 10) * 10 - 1;
         const it = { id: idOf(cat, style, tier, si), cat, style, tier, si, w: sz[0], d: sz[1], h: sz[2],
           name: C.name + ' “' + S.series[tier] + '”' + (sz[3] ? ', ' + sz[3] : ''), price, supplier: S.supplier,
           c1: cat === 'rug' ? S.rug[tier] : S.fabric[tier], c2: S.wood[tier], c3: S.metal };
-        it.swatch = (cat === 'sofa' || cat === 'armchair' || cat === 'rug' || cat === 'bed') ? it.c1 : (cat === 'plant' ? 0x4f7f4a : (cat === 'lamp' ? it.c3 : it.c2));
+        if (C.area) it.c1 = parseInt(S.floor[tier].slice(1), 16);
+        it.swatch = C.area ? it.c1 : (cat === 'toilet' || cat === 'tub' || cat === 'shower') ? CERAMIC : (cat === 'fridge' || cat === 'range') ? STEEL : (cat === 'sofa' || cat === 'armchair' || cat === 'rug' || cat === 'bed') ? it.c1 : (cat === 'plant' ? 0x4f7f4a : (cat === 'lamp' ? it.c3 : it.c2));
         CATALOG.push(it); BYID[it.id] = it;
       });
     }

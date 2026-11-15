@@ -58,7 +58,7 @@ button{cursor:pointer}
 .btn:hover{border-color:var(--accent)}
 .btn.danger{color:var(--warn)}
 .btnrow{display:flex; gap:8px; flex-wrap:wrap}
-.btnrow .btn{flex:1}
+.btnrow .btn{flex:1 1 40%}
 .note{font-size:12px; color:var(--muted); margin:0}
 .rooms{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px}
 .rooms button{width:100%; display:flex; justify-content:space-between; gap:8px; align-items:baseline; text-align:left; border:1px solid var(--line); background:var(--bg); border-radius:10px; padding:9px 11px; font-weight:600}
@@ -157,7 +157,7 @@ button{cursor:pointer}
           <button type="button" data-v="loft">Industrial</button>
         </div>
         <div class="budget-val num" id="outBudget"></div>
-        <input id="inBudget" type="range" min="2000" max="40000" step="500" aria-label="Budget for the whole home" style="accent-color:var(--accent)">
+        <input id="inBudget" type="range" min="3000" max="60000" step="500" aria-label="Budget for the whole home" style="accent-color:var(--accent)">
         <div class="seg" id="segUnits">
           <button type="button" data-v="ft">Feet</button>
           <button type="button" data-v="m">Metres</button>
@@ -166,20 +166,24 @@ button{cursor:pointer}
       <div class="grp">
         <h2>Rooms</h2>
         <ul class="rooms" id="roomList"></ul>
-        <div class="btnrow">
-          <button type="button" class="btn" id="addLiving">+ Living room</button>
-          <button type="button" class="btn" id="addBedroom">+ Bedroom</button>
+        <div class="btnrow" id="addRow">
+          <button type="button" class="btn" data-add="living">+ Living</button>
+          <button type="button" class="btn" data-add="bedroom">+ Bedroom</button>
+          <button type="button" class="btn" data-add="kitchen">+ Kitchen</button>
+          <button type="button" class="btn" data-add="bathroom">+ Bathroom</button>
         </div>
       </div>
       <div class="grp" id="roomGrp">
         <h2>Selected room</h2>
         <div class="row"><label for="inName">Name</label><input id="inName" type="text" maxlength="24" autocomplete="off"></div>
         <div class="seg" id="segType">
-          <button type="button" data-v="living">Living room</button>
-          <button type="button" data-v="bedroom">Bedroom</button>
+          <button type="button" data-v="living">Living</button>
+          <button type="button" data-v="bedroom">Bed</button>
+          <button type="button" data-v="kitchen">Kitchen</button>
+          <button type="button" data-v="bathroom">Bath</button>
         </div>
-        <div class="row"><label for="inW">Width</label><input id="inW" type="range" min="2.6" max="9" step="0.1"><output id="outW" class="num"></output></div>
-        <div class="row"><label for="inD">Depth</label><input id="inD" type="range" min="2.6" max="9" step="0.1"><output id="outD" class="num"></output></div>
+        <div class="row"><label for="inW">Width</label><input id="inW" type="range" min="1.6" max="9" step="0.1"><output id="outW" class="num"></output></div>
+        <div class="row"><label for="inD">Depth</label><input id="inD" type="range" min="1.6" max="9" step="0.1"><output id="outD" class="num"></output></div>
         <button type="button" class="btn danger" id="delRoom">Delete room</button>
       </div>
       <button type="button" class="btn" id="btnReset">Redo the whole design</button>

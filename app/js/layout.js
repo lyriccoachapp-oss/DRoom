@@ -113,6 +113,35 @@ function runLayout(r,want,forced){
     corner('lamp',0.5,false);
     corner('plant',0.5,true);
   }
+  if(want.has('cabrun')){ /* kitchen: fridge, cabinet run and range in a line along one wall */
+    const score=w=>{let s=wallLen(r,w)/10;if(r.win.wall!==w)s+=2;if(r.door.wall!==w)s+=2;return s;};
+    const kw=all.slice().sort((a,b)=>score(b)-score(a))[0],len=wallLen(r,kw),far=doorT(kw);
+    const pos=s=>far===0?s:len-s;
+    let cur=0.05;
+    const put=(cat,si)=>{const sz=dims(cat,si);
+      for(let sh=0;sh<=1.2;sh+=0.1){const c=cur+sh;if(c+sz[0]>len-0.04)break;
+        const rect=at(r,kw,pos(c+sz[0]/2),0.02+sz[1]/2,sz[0],sz[1]);
+        if(fits(rect,sz[2])){rect.gap=0.02;cur=c+sz[0]+0.02;return add(cat,si,rect);}}
+      return null;};
+    const rangeW=want.has('range')?dims('range',0)[0]+0.02:0;
+    let run=null;
+    for(const si of sizes('cabrun')){if(cur+dims('cabrun',si)[0]+rangeW>len-0.04)continue;run=put('cabrun',si);if(run)break;}
+    if(want.has('range'))put('range',sizes('range')[0]);
+    if(want.has('fridge')&&!put('fridge',sizes('fridge')[0]))byWalls('fridge',all.filter(w=>w!==kw),0.6);
+    if(run&&want.has('uppers')&&(forced.uppers==null||forced.uppers===run.si)){
+      const sz=dims('uppers',run.si),rect=at(r,kw,run.t,0.02+sz[1]/2,sz[0],sz[1]);
+      if(!overlap(rect,r.winRect))add('uppers',run.si,rect,{flat:true});}
+    if(run&&want.has('island')){const si=sizes('island')[0],sz=dims('island',si),ac=acrossOf(r,kw);
+      if(ac>=0.64+1.05+sz[1]+0.95&&len>=sz[0]+1.6){const rect=at(r,kw,len/2,0.64+1.05+sz[1]/2,sz[0],sz[1]);if(fits(rect,sz[2]))add('island',si,rect);}}
+  }
+  if(want.has('vanity')){ /* bathroom: fixtures against the walls, away from the door */
+    const order=all.slice().sort((a,b)=>(a===r.door.wall?1:0)-(b===r.door.wall?1:0));
+    byWalls('tub',order,0.5);
+    byWalls('vanity',order,0.55);
+    byWalls('toilet',order,0.5);
+    if(!placed.some(p=>p.cat==='tub'))corner('shower',2,false);
+    byWalls('bathcab',order,0.45);
+  }
   return placed;
 }
 
@@ -129,12 +158,13 @@ function planRoom(room,style,budget,notes){
   for(const c in forced){if(want.has(c)&&!placed.some(p=>p.cat===c)){
     notes.push(BYID[room.overrides[c]].name+' does not fit in '+room.name+'. A different size was chosen.');
     delete room.overrides[c];return planRoom(room,style,budget,notes);}}
-  const has=c=>placed.some(p=>p.cat===c);
+  const area=Math.ceil(r.W*r.D*1.1*10)/10;
+  const has=c=>CATS[c].area||placed.some(p=>p.cat===c);
   const excluded=[];
-  spec.all.forEach(c=>{if(room.removed.includes(c))excluded.push({cat:c,reason:'removed'});else if(!has(c))excluded.push({cat:c,reason:'space'});});
-  let active=spec.all.filter(has);
-  const qty=c=>placed.filter(p=>p.cat===c).length;
-  const si=c=>placed.find(p=>p.cat===c).si;
+  spec.all.forEach(c=>{if(room.removed.includes(c))excluded.push({cat:c,reason:'removed'});else if(!has(c)&&!(c==='shower'&&has('tub')))excluded.push({cat:c,reason:'space'});});
+  let active=spec.all.filter(c=>has(c)&&!room.removed.includes(c));
+  const qty=c=>CATS[c].area?area:placed.filter(p=>p.cat===c).length;
+  const si=c=>CATS[c].area?0:placed.find(p=>p.cat===c).si;
   const tier={};active.forEach(c=>tier[c]=0);
   const itemOf=c=>room.overrides[c]?BYID[room.overrides[c]]:BYID[idOf(c,style,tier[c],si(c))];
   const total=()=>active.reduce((s,c)=>s+itemOf(c).price*qty(c),0);
@@ -147,12 +177,13 @@ function planRoom(room,style,budget,notes){
   while(changed){changed=false;
     for(const c of active){if(room.overrides[c]||tier[c]>=2)continue;tier[c]++;if(total()>budget)tier[c]--;else changed=true;}}
   placed=placed.filter(p=>active.includes(p.cat));
-  const lines=active.map(c=>({cat:c,item:itemOf(c),qty:qty(c)}));
+  const lines=active.map(c=>({cat:c,item:itemOf(c),qty:qty(c),area:!!CATS[c].area}));
   return {room,r,placed,lines,excluded,total:total(),budget,notes};
 }
 /* Would size `si` of this category fit, keeping every other placed item at its current size? */
 function canFit(plan,cat,si){
-  const forced={};plan.lines.forEach(l=>forced[l.cat]=l.item.si);forced[cat]=si;
-  const want=new Set(plan.lines.map(l=>l.cat));
+  if(CATS[cat].area)return true;
+  const forced={};plan.lines.forEach(l=>{if(!l.area)forced[l.cat]=l.item.si;});forced[cat]=si;
+  const want=new Set(plan.lines.filter(l=>!l.area).map(l=>l.cat));
   return runLayout(plan.r,want,forced).some(p=>p.cat===cat);
 }

@@ -1,7 +1,7 @@
 'use strict';
 /* 2D plan editor (SVG). Drag a room to move it, the corner handle to resize it, and the door or window marker along the walls. */
 const PlanEditor = (function () {
-  const NS = 'http://www.w3.org/2000/svg', S = 100, MIN = 2.6, MAX = 9;
+  const NS = 'http://www.w3.org/2000/svg', S = 100, MIN = 1.6, MAX = 9;
   let svg, get, onChange, onSelect, drag = null, fitted = false;
   const snap = v => Math.round(v * 10) / 10;
   function el(name, attrs, parent, text) {
@@ -45,7 +45,7 @@ const PlanEditor = (function () {
     st.rooms.forEach((o, i) => {
       const pl = st.plans[i], on = o.id === st.roomId, g = el('g', { class: 'rm' + (on ? ' on' : '') }, svg);
       el('rect', { x: o.x * S, y: o.y * S, width: o.W * S, height: o.D * S, class: 'room', 'data-act': 'move', 'data-room': o.id }, g);
-      if (pl) pl.placed.forEach(q => el('rect', { x: (o.x + q.cx - q.hx) * S, y: (o.y + q.cz - q.hz) * S, width: q.hx * 2 * S, height: q.hz * 2 * S, rx: 6, class: 'furn' + (q.flat ? ' rug' : '') + (st.sel && st.sel.roomId === o.id && st.sel.cat === q.cat ? ' sel' : '') }, g));
+      if (pl) pl.placed.filter(q => q.cat !== 'uppers').forEach(q => el('rect', { x: (o.x + q.cx - q.hx) * S, y: (o.y + q.cz - q.hz) * S, width: q.hx * 2 * S, height: q.hz * 2 * S, rx: 6, class: 'furn' + (q.flat ? ' rug' : '') + (st.sel && st.sel.roomId === o.id && st.sel.cat === q.cat ? ' sel' : '') }, g));
       if (pl) {
         const d = opening(o, pl.r, pl.r.door.wall, pl.r.door.t, 0.9), w = opening(o, pl.r, pl.r.win.wall, pl.r.win.t, 1.4);
         el('line', { x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2, class: 'door' }, g);

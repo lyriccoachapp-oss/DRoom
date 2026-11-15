@@ -46,8 +46,14 @@ const Scene3D = (function () {
     const white = M(0xfbfaf7, 0.8), wm = M(S.wall, 1), base = floorTexture(style);
     plans.forEach(pl => {
       const r = pl.r, o = pl.room, g = new THREE.Group(); g.position.set(o.x, 0, o.y);
-      const tex = base.clone(); tex.needsUpdate = true; tex.repeat.set(r.W / 2.2, r.D / 2.2); texes.push(tex);
-      const fl = new THREE.Mesh(new THREE.PlaneGeometry(r.W, r.D), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.75 }));
+      const fin = pl.lines.find(l => l.area);
+      let fmat;
+      if (fin) {
+        const tile = fin.cat === 'tile', tex = (tile ? tileTexture(fin.item.c1) : base).clone(); tex.needsUpdate = true;
+        tex.repeat.set(tile ? r.W / 1.6 : r.W / 2.2, tile ? r.D / 1.6 : r.D / 2.2); texes.push(tex);
+        fmat = new THREE.MeshStandardMaterial({ map: tex, roughness: tile ? 0.45 : 0.75 });
+      } else fmat = M(0x9a9a98, 0.95);
+      const fl = new THREE.Mesh(new THREE.PlaneGeometry(r.W, r.D), fmat);
       fl.rotation.x = -Math.PI / 2; fl.position.set(r.W / 2, 0, r.D / 2); fl.receiveShadow = true; g.add(fl);
       const ceil = new THREE.Mesh(new THREE.PlaneGeometry(r.W, r.D), M(0xf7f6f3, 1)); ceil.rotation.x = Math.PI / 2; ceil.position.set(r.W / 2, H, r.D / 2); g.add(ceil);
       for (const w in WALLS) { const len = wallLen(r, w), pt = wallPoint(r, w, len / 2); const m = plane(len, H, wm, [pt[0], H / 2, pt[1]], ROT[w]); m.receiveShadow = true; g.add(m); }
@@ -72,7 +78,7 @@ const Scene3D = (function () {
     T.sun.position.set(cx + 6, 11, cz + 5); T.sun.target.position.set(cx, 0, cz);
     const sc = T.sun.shadow.camera; sc.left = -ext; sc.right = ext; sc.top = ext; sc.bottom = -ext; sc.near = 0.5; sc.far = 40; sc.updateProjectionMatrix();
     const key = [bb.x0, bb.z0, bb.x1, bb.z1].join(',');
-    if (cam.key !== key) { cam.key = key; cam.radius = Math.max(bb.x1 - bb.x0, bb.z1 - bb.z0) * 1.1 + 4; if (!inside(cam.x, cam.z)) { cam.x = cx; cam.z = cz; } }
+    if (cam.key !== key) { cam.key = key; cam.radius = Math.max(bb.x1 - bb.x0, bb.z1 - bb.z0) * 1.4 + 4; if (!inside(cam.x, cam.z)) { cam.x = cx; cam.z = cz; } }
     highlight(); T.dirty = true;
   }
   function highlight() {

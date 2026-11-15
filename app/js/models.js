@@ -83,3 +83,53 @@ function floorTexture(style){
   const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.encoding=THREE.sRGBEncoding;t.anisotropy=4;
   return floorTex[style]=t;
 }
+
+/* Kitchen and bathroom models. */
+const COUNTER={scandi:0xECE8E1,modern:0xD5D6DA,loft:0x3B3B3D};
+const steel=()=>M(STEEL,.35,.6);
+function doorLines(g,w,h0,h1,z,m,step){const n=Math.max(1,Math.round(w/(step||0.6)));for(let i=1;i<n;i++)B(g,0.008,h1-h0,0.006,m,-w/2+w*i/n,h0,z);}
+BUILD.cabrun=function(g,it){const w=it.w,d=it.d,h=it.h,m=M(it.c2,.7),dk=M(shade(it.c2,-0.3),.7);
+  B(g,w-0.04,0.1,d-0.1,dk,0,0,-0.03);B(g,w,h-0.14,d-0.02,m,0,0.1,-0.01);B(g,w+0.01,0.04,d+0.02,M(COUNTER[it.style],.4),0,h-0.04,0);
+  doorLines(g,w,0.12,h-0.05,d/2-0.02,dk);
+  const sx=-w/2+Math.min(0.55,w/2);B(g,0.52,0.012,0.4,steel(),sx,h,0.02).castShadow=false;B(g,0.44,0.006,0.32,M(0x7f858c,.4,.6),sx,h+0.012,0.02).castShadow=false;
+  Cy(g,0.012,0.012,0.22,steel(),sx,h,-d/2+0.08);B(g,0.02,0.02,0.16,steel(),sx,h+0.21,-d/2+0.15);};
+BUILD.uppers=function(g,it){const w=it.w,d=it.d,h=it.h,m=M(it.c2,.7),dk=M(shade(it.c2,-0.3),.7);
+  B(g,w,h,d,m,0,1.45,0);doorLines(g,w,1.47,1.43+h,d/2,dk);};
+BUILD.range=function(g,it){const w=it.w,d=it.d,h=it.h;
+  B(g,w,h-0.02,d,steel(),0,0,0);B(g,w,0.02,d,M(0x15161a,.3),0,h-0.02,0);B(g,w-0.1,0.42,0.01,M(0x1b1c20,.2),0,0.2,d/2);B(g,w-0.14,0.02,0.03,steel(),0,0.68,d/2+0.02);
+  [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(s=>{Cy(g,0.08,0.08,0.008,M(0x2a2b30,.5),s[0]*w*0.22,h,s[1]*d*0.2).castShadow=false;});
+  B(g,w,0.1,0.03,steel(),0,h,-d/2+0.015);};
+BUILD.fridge=function(g,it){const w=it.w,d=it.d,h=it.h,dk=M(0x70757b,.5);
+  B(g,w,h,d,steel(),0,0,0);B(g,w,0.008,0.006,dk,0,0.62,d/2);B(g,0.008,h-0.64,0.006,dk,0,0.63,d/2);
+  B(g,0.02,0.5,0.03,dk,-0.05,0.9,d/2+0.015);B(g,0.02,0.5,0.03,dk,0.05,0.9,d/2+0.015);B(g,0.3,0.02,0.03,dk,0,0.5,d/2+0.015);};
+BUILD.island=function(g,it){const w=it.w,d=it.d,h=it.h,m=M(it.c2,.7),dk=M(shade(it.c2,-0.3),.7);
+  B(g,w-0.16,0.1,d-0.2,dk,0,0,0);B(g,w-0.1,h-0.14,d-0.14,m,0,0.1,0);B(g,w,0.04,d,M(COUNTER[it.style],.4),0,h-0.04,0);doorLines(g,w-0.1,0.12,h-0.05,d/2-0.07,dk);};
+BUILD.vanity=function(g,it){const w=it.w,d=it.d,h=it.h,m=M(it.c2,.7),dk=M(shade(it.c2,-0.3),.7);
+  B(g,w-0.06,0.1,d-0.1,dk,0,0,-0.02);B(g,w,h-0.14,d-0.02,m,0,0.1,-0.01);B(g,w+0.02,0.04,d+0.02,M(COUNTER[it.style],.4),0,h-0.04,0);
+  doorLines(g,w,0.12,h-0.05,d/2-0.02,dk,0.45);
+  const bw=Math.min(0.5,w-0.14);B(g,bw,0.014,d*0.62,M(CERAMIC,.2),0,h,0.02).castShadow=false;B(g,bw-0.08,0.006,d*0.46,M(0xdde3e7,.2),0,h+0.014,0.02).castShadow=false;
+  Cy(g,0.012,0.012,0.16,steel(),0,h,-d/2+0.07);B(g,0.02,0.02,0.12,steel(),0,h+0.15,-d/2+0.12);
+  B(g,w*0.82,0.7,0.02,M(0xcfdde6,.1,.6),0,1.15,-d/2+0.01).castShadow=false;};
+BUILD.toilet=function(g,it){const d=it.d,c=M(CERAMIC,.25);
+  B(g,0.38,0.38,0.18,c,0,0.4,-d/2+0.09);B(g,0.2,0.3,0.3,c,0,0,-d/2+0.25);
+  const bowl=Cy(g,0.19,0.13,0.4,c,0,0,0.09);bowl.scale.z=1.3;const seat=Cy(g,0.2,0.2,0.03,M(0xffffff,.3),0,0.4,0.09);seat.scale.z=1.3;};
+BUILD.tub=function(g,it){const w=it.w,d=it.d,h=it.h,c=M(CERAMIC,.2);
+  B(g,w,h,d,c,0,0,0);B(g,w-0.14,0.006,d-0.14,M(0xd9e4ea,.15),0,h,0).castShadow=false;
+  Cy(g,0.014,0.014,0.14,steel(),-w/2+0.09,h,0);B(g,0.12,0.02,0.02,steel(),-w/2+0.14,h+0.13,0);};
+BUILD.shower=function(g,it){const w=it.w,d=it.d,h=it.h;
+  const glass=new THREE.MeshStandardMaterial({color:lin(0xbfe0ea),transparent:true,opacity:0.28,roughness:0.1});
+  B(g,w,0.06,d,M(CERAMIC,.3),0,0,0);
+  const a=B(g,w,h-0.1,0.012,glass,0,0.06,d/2-0.006),b=B(g,0.012,h-0.1,d,glass,w/2-0.006,0.06,0);a.castShadow=b.castShadow=false;
+  Cy(g,0.012,0.012,h-0.2,steel(),-w/2+0.08,0.06,-d/2+0.08);Cy(g,0.1,0.1,0.02,steel(),-w/2+0.2,h-0.16,-d/2+0.2);};
+BUILD.bathcab=function(g,it){const w=it.w,d=it.d,h=it.h,m=M(it.c2,.7),dk=M(shade(it.c2,-0.3),.7);
+  B(g,w,h-0.06,d,m,0,0.06,0);B(g,w-0.04,0.06,d-0.06,dk,0,0,0);B(g,w-0.02,0.008,0.006,dk,0,h*0.5,d/2);B(g,0.018,0.2,0.022,M(it.c3,.4,.4),w/2-0.06,h*0.62,d/2+0.008);};
+/* Square-tile floor texture, tinted by the chosen tile. */
+const tileTex={};
+function tileTexture(color){
+  if(tileTex[color])return tileTex[color];
+  const c=document.createElement('canvas');c.width=c.height=256;const x=c.getContext('2d'),r=rnd(color);
+  for(let i=0;i<4;i++)for(let j=0;j<4;j++){x.fillStyle=hex(shade(color,(r()-0.5)*0.08));x.fillRect(i*64,j*64,64,64);}
+  x.fillStyle='rgba(40,40,40,.35)';for(let i=0;i<=4;i++){x.fillRect(i*64-1,0,2,256);x.fillRect(0,i*64-1,256,2);}
+  const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.encoding=THREE.sRGBEncoding;t.anisotropy=4;
+  return tileTex[color]=t;
+}
