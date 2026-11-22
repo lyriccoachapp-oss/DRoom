@@ -246,3 +246,13 @@ test('recognized rooms are pulled onto shared walls so walls are not counted twi
   assert.ok(t.int > 10 && t.int < 13, `inside walls ${t.int}`);          // 3.8 between the top rooms + 7.9 under them
   assert.ok(Math.abs(t.ext - 2 * (rs[2].W + rs[0].D + rs[2].D)) < 0.2, `outside walls ${t.ext}`);
 });
+
+test('walking: furniture is solid and the way round it is found', () => {
+  ctx.__fp = run(`[{id:'a',name:'Bed',type:'bedroom',x:0,y:0,W:4.5,D:4,doorWall:'S',doorPos:0.2,winWall:'N',winPos:0.5,overrides:{},removed:[]}].map(room => planRoom(room, 'scandi', 9000))`);
+  const p = ctx.__fp[0], bed = Array.from(p.placed).find(q => q.cat === 'bed'), rug = Array.from(p.placed).find(q => q.flat);
+  assert.ok(!run(`walkArea(__fp)(${bed.cx}, ${bed.cz})`), 'the middle of the bed is not walkable');
+  if (rug) { const fx = rug.cx + rug.hx - 0.1, fz = rug.cz + rug.hz - 0.1; if (!Array.from(p.placed).some(q => !q.flat && Math.abs(q.cx - fx) < q.hx + 0.13 && Math.abs(q.cz - fz) < q.hz + 0.13)) assert.ok(run(`walkArea(__fp)(${fx}, ${fz})`), 'a rug can be walked on'); }
+  /* every spot the door opens onto stays reachable from the doorway */
+  const d = p.r.doorRect, path = run(`findPath(walkArea(__fp), [${d.cx}, ${d.cz}], [${bed.cx + bed.hx + 0.45}, ${bed.cz}])`) || run(`findPath(walkArea(__fp), [${d.cx}, ${d.cz}], [${bed.cx - bed.hx - 0.45}, ${bed.cz}])`);
+  assert.ok(path && path.length, 'you can walk from the door to the side of the bed');
+});

@@ -99,6 +99,12 @@ input[type=file]{max-width:100%; font-size:13px}
 .mdoor{stroke:var(--sun); stroke-width:.22}
 .mdot{fill:var(--accent); stroke:var(--panel); stroke-width:.08}
 .mcone{fill:var(--accent); opacity:.28}
+.dims3d{position:absolute; inset:0; overflow:hidden; pointer-events:none}
+.dim{position:absolute; left:0; top:0; white-space:nowrap; font-size:11.5px; font-weight:600; font-variant-numeric:tabular-nums; padding:2px 7px; border-radius:999px; background:var(--panel); color:var(--ink); border:1px solid var(--line); box-shadow:0 1px 3px rgba(0,0,0,.18)}
+.dim.wall{background:var(--ink); color:var(--panel); border-color:var(--ink)}
+.dim.open{border-color:var(--plan-win)}
+.sizesbtn{position:absolute; top:54px; right:10px; padding:7px 12px; background:var(--panel); box-shadow:0 2px 8px rgba(0,0,0,.14); z-index:1}
+.sizesbtn[aria-pressed="true"]{background:var(--ink); color:var(--panel); border-color:var(--ink)}
 .renderbtn{position:absolute; top:10px; right:10px; padding:9px 14px; box-shadow:0 2px 8px rgba(0,0,0,.16); z-index:1}
 .renderpane{position:absolute; inset:0; z-index:3; background:var(--panel); display:flex; flex-direction:column; gap:10px; padding:12px}
 .rp-top{display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap}
@@ -273,7 +279,9 @@ input[type=file]{max-width:100%; font-size:13px}
         <button type="button" data-v="build">Build</button>
       </div>
     </div>
+    <div class="dims3d" id="dimLabels" aria-hidden="true"></div>
     <button type="button" class="btn primary renderbtn" id="btnRender" hidden>Photo render</button>
+    <button type="button" class="btn sizesbtn" id="btnSizes" aria-pressed="true" hidden>Sizes</button>
     <section class="renderpane" id="renderPane" aria-label="Photo render" hidden>
       <div class="rp-top"><strong id="rpTitle">Photo render</strong><span class="rp-actions"><button type="button" class="btn" id="rpCompare" hidden>Hold to compare</button><button type="button" class="btn primary" id="rpClose">Back to the 3D view</button></span></div>
       <div class="rp-body"><img id="rpImg" alt="Photorealistic render of the current view"><p class="rp-msg" id="rpMsg"></p></div>
