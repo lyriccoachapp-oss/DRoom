@@ -81,9 +81,9 @@ input[type=file]{max-width:100%; font-size:13px}
 .rooms small{font-weight:500; color:var(--muted)}
 
 .stage{position:relative; background:var(--stage); border:1px solid var(--line); border-radius:12px; overflow:hidden; min-height:0}
-.stage canvas,.stage #plan{position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none}
+.stage canvas,.stage #plan,.stage #drawing{position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none}
 .stage canvas{cursor:grab}
-.views{position:absolute; top:10px; left:10px; width:min(280px, calc(100% - 20px))}
+.views{position:absolute; top:10px; left:10px; width:min(350px, calc(100% - 20px))}
 .views .seg{background:var(--panel); border:1px solid var(--line)}
 .views .seg button[aria-pressed="true"]{background:var(--sun); color:var(--sun-ink); box-shadow:none}
 .cap{position:absolute; left:10px; right:10px; bottom:10px; display:flex; justify-content:space-between; align-items:flex-end; gap:10px; pointer-events:none; flex-wrap:wrap}
@@ -177,6 +177,7 @@ input[type=file]{max-width:100%; font-size:13px}
 .delta.up{color:var(--warn)} .delta.down{color:var(--good)}
 .out{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:3px; font-size:12.5px; color:var(--muted)}
 .out li{display:flex; justify-content:space-between; gap:10px; align-items:baseline}
+.item.tk{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:center; padding:8px 10px}
 .toast{font-size:12.5px; color:var(--warn); margin:0}
 
 @media (max-width:1040px){
@@ -248,6 +249,13 @@ input[type=file]{max-width:100%; font-size:13px}
         </div>
         <p class="note">Load a picture of your plan, then let the planner find the rooms. Set the scale by clicking the two ends of a wall you know the length of. Pictures and PDFs (first page) work; the file is not saved with the project.</p>
       </div>
+      <div class="grp" id="buildGrp" hidden>
+        <h2>Construction</h2>
+        <div class="row"><label for="selBH">Walls</label><select id="selBH"><option value="8">8 ft high</option><option value="9">9 ft high</option><option value="10">10 ft high</option></select></div>
+        <div class="row"><label for="selBS">Studs</label><select id="selBS"><option value="16">16 in on centre</option><option value="24">24 in on centre</option></select></div>
+        <div class="row"><label for="selBF">Base</label><select id="selBF"><option value="frost">Frost wall and slab</option><option value="slab">Slab on grade</option></select></div>
+        <div class="row"><label for="selBSlab">Slab</label><select id="selBSlab"><option value="4">4 in thick</option><option value="5">5 in thick</option><option value="6">6 in thick</option></select></div>
+      </div>
       <button type="button" class="btn" id="btnReset">Redo the whole design</button>
       <p class="note">In Plan view, drag a room to move it, the orange corner to resize it, and the round markers to move its door and window.</p>
     </div>
@@ -256,11 +264,13 @@ input[type=file]{max-width:100%; font-size:13px}
   <section class="stage" id="stage" aria-label="Plan and 3D view">
     <svg id="plan" role="img" aria-label="Floor plan editor"></svg>
     <canvas id="cv" hidden></canvas>
+    <svg id="drawing" role="img" aria-label="Dimensioned floor plan" hidden></svg>
     <div class="views">
       <div class="seg" id="segView">
         <button type="button" data-v="plan">Plan</button>
         <button type="button" data-v="orbit">3D</button>
         <button type="button" data-v="walk">Walk</button>
+        <button type="button" data-v="build">Build</button>
       </div>
     </div>
     <button type="button" class="btn primary renderbtn" id="btnRender" hidden>Photo render</button>
@@ -285,8 +295,17 @@ input[type=file]{max-width:100%; font-size:13px}
     <div class="cap"><span id="hint"></span><span class="dims num" id="homeDims"></span></div>
   </section>
 
-  <aside class="pane" aria-label="Shopping list">
-    <div class="pane-in">
+  <aside class="pane" aria-label="Shopping list and construction takeoff">
+    <div class="pane-in" id="buildPane" hidden>
+      <div class="grp">
+        <h2>Construction takeoff</h2>
+        <p class="status" id="buildSum"></p>
+        <div class="btnrow"><button type="button" class="btn" id="btnBuildCopy">Copy list</button><button type="button" class="btn" id="btnBuildCsv">Save as CSV</button><button type="button" class="btn" id="btnBuildSvg">Save drawing</button></div>
+      </div>
+      <div id="buildList" class="grp"></div>
+      <p class="note">Quantities are budgeting estimates from rules of thumb, with waste included. They are not an engineered or code-checked design: framing, foundations, plumbing and wiring must be designed and inspected to your local codes.</p>
+    </div>
+    <div class="pane-in" id="shopPane">
       <div class="grp">
         <h2>Shopping list</h2>
         <div class="sum">
@@ -311,4 +330,6 @@ input[type=file]{max-width:100%; font-size:13px}
 <script src="js/scene.js"></script>
 <script src="js/editor.js"></script>
 <script src="js/recognize.js"></script>
+<script src="js/takeoff.js"></script>
+<script src="js/drawing.js"></script>
 <script src="js/app.js"></script>
