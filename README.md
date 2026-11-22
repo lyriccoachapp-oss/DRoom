@@ -24,3 +24,19 @@ npm start
 - `server/render.js` — request checks, prompt, call to the image model.
 
 State of the project and the plan: `docs/ROADMAP.md`.
+
+## Store feeds
+
+`app/js/stores.js` connects stores to the planner. IKEA and The Home Depot are built in; any other store can be added by name.
+A store is filled from a product feed (CSV or JSON) imported in the **Stores** panel. Nothing is fetched from a store's site.
+
+Columns (the usual spellings are accepted, e.g. `title`, `product_type`, `width_cm`, `Depth (in)`, `link`):
+
+| Column | Notes |
+| --- | --- |
+| `sku`, `name`, `category`, `price` | `category` is matched by keywords to a planner category; `droom_category` may name one directly (`sofa`, `bed`, ...) |
+| `width`, `depth`, `height`, `unit` | or one `dimensions` column such as `80 x 36 x 33 in`; without a unit the store default is used (IKEA cm, Home Depot in) |
+| `url`, `image`, `color`, `style` | only http(s) links are kept |
+| `price_unit`, `coverage_sqft`, `price_per_sqft` | flooring and tile need a price per sq ft, or a box price with its coverage |
+
+A product is placed in the smallest layout size it fits inside. Rows the planner cannot use are counted by reason in the import message.

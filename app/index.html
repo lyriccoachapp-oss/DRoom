@@ -171,6 +171,12 @@ input[type=file]{max-width:100%; font-size:13px}
 .item-body .hd{display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:12px; color:var(--muted)}
 .linkbtn{border:0; background:transparent; color:var(--warn); padding:2px 0; font-size:12.5px; text-decoration:underline}
 .linkbtn.ok{color:var(--accent)}
+.stores{display:flex; flex-direction:column; gap:8px}
+.store{display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; font-size:13px}
+.store-name{display:flex; align-items:center; gap:8px; font-weight:600; flex:1 1 100%}
+.store-name input{accent-color:var(--accent)}
+.store small{color:var(--muted); flex:1}
+.storelink{display:inline-block; margin:0 0 8px; font-size:12.5px; font-weight:600; color:var(--accent)}
 .alts{display:flex; flex-direction:column; gap:4px; max-height:250px; overflow:auto}
 .alt{display:grid; grid-template-columns:18px minmax(0,1fr) auto; gap:8px; align-items:center; padding:6px 8px; border:1px solid transparent; border-radius:8px; background:var(--panel); text-align:left; width:100%}
 .alt:hover:not(:disabled){border-color:var(--accent)}
@@ -255,6 +261,15 @@ input[type=file]{max-width:100%; font-size:13px}
         </div>
         <p class="note">Load a picture of your plan, then let the planner find the rooms. Set the scale by clicking the two ends of a wall you know the length of. Pictures and PDFs (first page) work; the file is not saved with the project.</p>
       </div>
+      <div class="grp" id="storeGrp">
+        <h2>Stores</h2>
+        <div id="storeList" class="stores"></div>
+        <div class="btnrow"><button type="button" class="btn" id="btnStoreAdd">+ Store</button><button type="button" class="btn" id="btnStoreTpl">Feed template</button><button type="button" class="btn" id="btnStoreDemo">Try a sample feed</button></div>
+        <div class="row" id="storeAddRow" hidden><label for="inStoreName">Name</label><input id="inStoreName" type="text" maxlength="40" autocomplete="off"><button type="button" class="btn" id="btnStoreAddOk">Add</button></div>
+        <input type="file" id="storeFile" accept=".csv,.tsv,.txt,.json,text/csv,application/json" hidden>
+        <p class="toast" id="storeMsg" hidden></p>
+        <p class="note">Import a product feed (CSV or JSON) for each store. Products from stores that are switched on replace the sample catalog wherever they fit the room and the budget.</p>
+      </div>
       <div class="grp" id="buildGrp" hidden>
         <h2>Construction</h2>
         <div class="row"><label for="selBH">Walls</label><select id="selBH"><option value="8">8 ft high</option><option value="9">9 ft high</option><option value="10">10 ft high</option></select></div>
@@ -333,6 +348,7 @@ input[type=file]{max-width:100%; font-size:13px}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="js/catalog.js"></script>
+<script src="js/stores.js"></script>
 <script src="js/layout.js"></script>
 <script src="js/models.js"></script>
 <script src="js/scene.js"></script>

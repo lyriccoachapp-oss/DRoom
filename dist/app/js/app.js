@@ -32,11 +32,13 @@
   }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
 
+  Stores.load(localStorage);
   const state = load() || defaults();
   UNITS.v = state.units === 'm' ? 'm' : 'ft';
   let plans = [], sel = null, toast = '', has3d = false, sceneStale = true, trace = null, clash = new Set();
   const hist = []; let hi = -1, htimer = null;
   const room = () => state.rooms.find(r => r.id === state.roomId) || null;
+  const is3d = () => state.view === 'orbit' || state.view === 'walk';
   const planOf = id => plans.find(p => p.room.id === id);
 
   function generateAll() {
@@ -108,22 +110,61 @@
     }
     const area = state.rooms.reduce((s, x) => s + roomArea(x), 0);
     $('#homeDims').textContent = state.rooms.length + (state.rooms.length === 1 ? ' room · ' : ' rooms · ') + fmtArea(area);
-    $('#hint').textContent = state.view === 'plan' ? 'Drag rooms, corners and markers to edit the plan'
+    $('#hint').textContent = state.view === 'build' ? 'Drawing and materials follow the plan · change rooms on the Plan tab' : state.view === 'plan' ? 'Drag rooms, corners and markers to edit the plan'
       : state.view === 'walk' ? 'Click floor to walk · double-click furniture · drag to look · wheel to step'
       : 'Drag to rotate · scroll to zoom · double-click furniture to swap it';
-    $('#btnRender').hidden = state.view === 'plan' || !has3d || !plans.length;
-    if (state.view === 'plan') $('#renderPane').hidden = true;
+    $('#btnRender').hidden = !is3d() || !has3d || !plans.length;
+    $('#btnSizes').hidden = !is3d() || !has3d || !plans.length; $('#btnSizes').setAttribute('aria-pressed', state.sizes === false ? 'false' : 'true');
+    $('#dimLabels').hidden = !is3d();
+    if (!is3d()) $('#renderPane').hidden = true;
     $('#walkpad').hidden = state.view !== 'walk' || !has3d;
     $('#mini').toggleAttribute('hidden', state.view !== 'walk' || !has3d);
     const wr = $('#walkRooms'); wr.hidden = state.view !== 'walk' || !has3d || state.rooms.length < 2; wr.textContent = '';
     if (!wr.hidden) state.rooms.forEach(r => { const b = el('button', '', r.name); b.type = 'button'; b.dataset.id = r.id; b.setAttribute('aria-pressed', r.id === state.roomId ? 'true' : 'false'); b.addEventListener('click', () => { state.roomId = r.id; Scene3D.goRoom(r.id); renderSide(); }); wr.appendChild(b); });
     $('#plan').style.display = state.view === 'plan' ? '' : 'none';
-    $('#cv').hidden = state.view === 'plan' || !has3d;
-    $('#fail').hidden = state.view === 'plan' || has3d;
+    $('#cv').hidden = !is3d() || !has3d;
+    $('#fail').hidden = !is3d() || has3d;
+    $('#drawing').toggleAttribute('hidden', state.view !== 'build');
+    $('#shopPane').hidden = state.view === 'build'; $('#buildPane').hidden = state.view !== 'build'; $('#buildGrp').hidden = state.view !== 'build';
+    const bo = buildOpts(state.build); $('#selBH').value = bo.height; $('#selBS').value = bo.spacing; $('#selBF').value = bo.foundation; $('#selBSlab').value = bo.slab;
   }
   const REASON = { budget: 'over budget', space: 'does not fit', removed: 'removed by you' };
+  /* ---------- Build tab: drawing and construction takeoff ---------- */
+  let lastTakeoff = null;
+  const today = () => new Date().toISOString().slice(0, 10);
+  function renderBuild() {
+    if (state.view !== 'build') return;
+    const t = lastTakeoff = takeoff(plans, state.build);
+    BuildDrawing.draw($('#drawing'), plans, t, null, today());
+    const box = $('#buildList'); box.textContent = '';
+    $('#buildSum').textContent = plans.length ? 'Outside walls ' + fmtLen(t.ext) + ' \u00b7 inside walls ' + fmtLen(t.int) + ' \u00b7 floor ' + fmtArea(t.area) : 'Add rooms on the Plan tab.';
+    t.groups.forEach(g => {
+      const d = el('div', 'rgroup'); d.appendChild(el('div', 'rhead', g.title));
+      if (!g.lines.length) d.appendChild(el('p', 'note', g.empty || 'Nothing to list yet.'));
+      const ul = el('ul', 'items');
+      g.lines.forEach(l => {
+        const li = el('li', 'item tk'), a = el('span'); a.append(el('div', 'nm', l.name), el('div', 'meta', l.detail));
+        li.append(a, el('span', 'pr num', l.qty.toLocaleString('en-US') + ' ' + l.unit)); ul.appendChild(li);
+      });
+      d.appendChild(ul); box.appendChild(d);
+    });
+  }
+  /* Saves a file through the host when it offers that, else with a plain download link. */
+  async function saveFile(filename, text, mime) {
+    try { const dl = window.claude && window.claude.use ? await window.claude.use('downloads') : null; if (dl) { await dl.save({ filename, data: text }); return true; } } catch (e) { return false; }
+    try { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: mime })); a.download = filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); return true; } catch (e) { return false; }
+  }
+  function flash(b, ok, label) { b.textContent = ok ? 'Done' : 'Could not save'; setTimeout(() => { b.textContent = label; }, 1600); }
+  ['selBH:height', 'selBS:spacing', 'selBF:foundation', 'selBSlab:slab'].forEach(k => { const a = k.split(':'); $('#' + a[0]).addEventListener('change', e => { state.build = Object.assign({}, buildOpts(state.build), { [a[1]]: e.target.value }); save(); renderBuild(); }); });
+  $('#btnBuildCopy').addEventListener('click', () => {
+    if (!lastTakeoff) return;
+    const out = ['DRoom construction takeoff, ' + today()]; lastTakeoff.groups.forEach(g => { out.push('', g.title); g.lines.forEach(l => out.push('- ' + l.name + ': ' + l.qty + ' ' + l.unit + (l.detail ? ' (' + l.detail + ')' : ''))); });
+    const b = $('#btnBuildCopy'); try { navigator.clipboard.writeText(out.join('\n')).then(() => flash(b, true, 'Copy list'), () => flash(b, false, 'Copy list')); } catch (e) { flash(b, false, 'Copy list'); }
+  });
+  $('#btnBuildCsv').addEventListener('click', async () => { if (lastTakeoff) flash($('#btnBuildCsv'), await saveFile('droom-takeoff.csv', takeoffCsv(lastTakeoff), 'text/csv'), 'Save as CSV'); });
+  $('#btnBuildSvg').addEventListener('click', async () => { if (lastTakeoff) flash($('#btnBuildSvg'), await saveFile('droom-floor-plan.svg', BuildDrawing.toSvgText(plans, lastTakeoff, today()), 'image/svg+xml'), 'Save drawing'); });
   function renderList() {
-    renderCard();
+    renderCard(); renderBuild();
     const total = plans.reduce((s, p) => s + p.total, 0), over = total > state.budget;
     $('#sumTotal').textContent = money(total); $('#sumOf').textContent = 'of ' + money(state.budget);
     $('#bar').classList.toggle('over', over); $('#barFill').style.width = clamp(total / state.budget * 100, 0, 100) + '%';
@@ -142,7 +183,7 @@
         const hd = el('button', 'item-head'); hd.type = 'button'; hd.setAttribute('aria-expanded', on ? 'true' : 'false');
         const sw = el('span', 'sw'); sw.style.background = l.unit && r.wallColor ? r.wallColor : hex(it.swatch);
         const mid = el('span'); mid.append(el('div', 'nm', it.name + (l.unit ? ', ' + l.qty + ' ' + l.unit : l.area ? ', ' + fmtArea(l.qty) : l.qty > 1 ? ' × ' + l.qty : '')), el('div', 'meta num', fmtDims(it)));
-        const pr = el('span', 'pr num', money(it.price * l.qty)); pr.appendChild(el('small', '', STYLES[it.style].name + ' · ' + TIERS[it.tier].name));
+        const pr = el('span', 'pr num', money(it.price * l.qty)); pr.appendChild(el('small', '', itemTag(it)));
         hd.append(sw, mid, pr); hd.addEventListener('click', () => select(on ? null : { roomId: r.id, cat: l.cat })); li.appendChild(hd);
         if (on) li.appendChild(altsFor(p, l));
         ul.appendChild(li);
@@ -169,12 +210,14 @@
       hd.appendChild(rm);
     }
     body.appendChild(hd);
+    const href = Stores.linkOf(it);
+    if (href) { const a = el('a', 'storelink', (it.url ? 'View at ' : 'Find at ') + it.supplier); a.href = href; a.target = '_blank'; a.rel = 'noopener noreferrer'; body.appendChild(a); }
     const alts = el('div', 'alts'), fit = {};
     CATALOG.filter(a => a.cat === l.cat).sort((a, b) => (a.style === state.style ? 0 : 1) - (b.style === state.style ? 0 : 1) || a.price - b.price).forEach(a => {
       const b = el('button', 'alt'); b.type = 'button';
       const ok = a.si === it.si || (fit[a.si] !== undefined ? fit[a.si] : (fit[a.si] = canFit(p, l.cat, a.si)));
       const s2 = el('span', 'sw'); s2.style.background = hex(a.swatch);
-      const m2 = el('span'); m2.append(el('div', 'nm', a.name), el('div', 'meta num', ok ? STYLES[a.style].name + ' · ' + TIERS[a.tier].name + ' · ' + fmtDims(a) : 'does not fit'));
+      const m2 = el('span'); m2.append(el('div', 'nm', a.name), el('div', 'meta num', ok ? itemTag(a) + ' · ' + fmtDims(a) : 'does not fit'));
       const dlt = (a.price - it.price) * l.qty;
       const d = el('span', 'delta num' + (dlt > 0 ? ' up' : dlt < 0 ? ' down' : ''), a.id === it.id ? 'selected' : (dlt > 0 ? '+' : dlt < 0 ? '−' : '') + money(Math.abs(dlt)));
       b.append(s2, m2, d);
@@ -190,12 +233,12 @@
   let cardOpen = false;
   function select(s, from3d) {
     sel = s; if (s) state.roomId = s.roomId;
-    cardOpen = !!(s && from3d && state.view !== 'plan');
+    cardOpen = !!(s && from3d && is3d());
     renderSide(); renderList(); PlanEditor.render(); Scene3D.setSelected(sel);
   }
   function renderCard() {
     const card = $('#itemCard'), p = sel && planOf(sel.roomId), l = p && p.lines.find(x => x.cat === sel.cat);
-    card.hidden = !(cardOpen && l && state.view !== 'plan');
+    card.hidden = !(cardOpen && l && is3d());
     if (card.hidden) return;
     const it = l.item;
     $('#icName').textContent = it.name + (l.unit ? ', ' + l.qty + ' ' + l.unit : l.area ? ', ' + fmtArea(l.qty) : l.qty > 1 ? ' \u00d7 ' + l.qty : '');
@@ -210,7 +253,7 @@
   $('#icClose').addEventListener('click', closeCard);
   window.addEventListener('keydown', e => { if (e.key === 'Escape' && cardOpen) closeCard(); });
   function syncScene() {
-    if (state.view === 'plan') { sceneStale = true; return; }
+    if (!is3d()) { sceneStale = true; return; }
     Scene3D.build(plans, state.style); Scene3D.setSelected(sel); sceneStale = false;
   }
   function update(skipHistory) {
@@ -218,17 +261,53 @@
     if (skipHistory !== true) record();
   }
 
+  /* ---------- stores ---------- */
+  let storeTarget = null, storeMsg = '';
+  function renderStores() {
+    const box = $('#storeList'); box.textContent = '';
+    Stores.list().forEach(s => {
+      const row = el('div', 'store'), lab = el('label', 'store-name'), cb = document.createElement('input');
+      cb.type = 'checkbox'; cb.checked = s.enabled; cb.addEventListener('change', () => { Stores.setEnabled(s.id, cb.checked); storesChanged(''); });
+      lab.append(cb, el('span', '', s.name));
+      const imp = el('button', 'linkbtn ok', s.count ? 'Replace feed' : 'Import feed'); imp.type = 'button';
+      imp.addEventListener('click', () => { storeTarget = s.id; $('#storeFile').value = ''; $('#storeFile').click(); });
+      row.append(lab, el('small', 'num', s.count ? s.count + (s.count === 1 ? ' product' : ' products') + (s.updated ? ' · ' + s.updated : '') : 'no feed yet'), imp);
+      if (s.count || s.custom) { const rm = el('button', 'linkbtn', s.custom ? 'Remove' : 'Clear'); rm.type = 'button'; rm.addEventListener('click', () => { Stores.remove(s.id); storesChanged(''); }); row.appendChild(rm); }
+      box.appendChild(row);
+    });
+    const m = $('#storeMsg'); m.hidden = !storeMsg; m.textContent = storeMsg;
+  }
+  function storesChanged(msg) {
+    storeMsg = msg; if (!Stores.save(localStorage)) storeMsg += ' The feed is too large to keep in this browser, so it will be gone after a reload.';
+    renderStores(); update();
+  }
+  function importInto(id, text) {
+    try {
+      const r = Stores.importFeed(id, text), why = Object.keys(r.skipped).map(k => r.skipped[k] + ' ' + k).join('; ');
+      storesChanged('Imported ' + r.added + ' of ' + r.total + ' products.' + (why ? ' Left out: ' + why + '.' : ''));
+    } catch (e) { storeMsg = 'Could not read the feed: ' + e.message; renderStores(); }
+  }
+  $('#storeFile').addEventListener('change', e => {
+    const f = e.target.files[0]; if (!f || !storeTarget) return;
+    const fr = new FileReader(); fr.onload = () => importInto(storeTarget, String(fr.result)); fr.onerror = () => { storeMsg = 'Could not read the file.'; renderStores(); }; fr.readAsText(f);
+  });
+  $('#btnStoreAdd').addEventListener('click', () => { $('#storeAddRow').hidden = !$('#storeAddRow').hidden; if (!$('#storeAddRow').hidden) $('#inStoreName').focus(); });
+  $('#btnStoreAddOk').addEventListener('click', () => { if (Stores.add($('#inStoreName').value)) { $('#inStoreName').value = ''; $('#storeAddRow').hidden = true; storesChanged(''); } });
+  $('#btnStoreTpl').addEventListener('click', async () => flash($('#btnStoreTpl'), await saveFile('droom-feed-template.csv', Stores.TEMPLATE, 'text/csv'), 'Feed template'));
+  $('#btnStoreDemo').addEventListener('click', () => { const id = (Stores.list().find(s => s.name === 'Sample Store') || {}).id || Stores.add('Sample Store'); importInto(id, Stores.SAMPLE); });
+  renderStores();
+
   /* ---------- wiring ---------- */
   function seg(id, fn) { $(id).addEventListener('click', e => { const b = e.target.closest('button'); if (b) fn(b.dataset.v); }); }
   seg('#segStyle', v => { state.style = v; state.rooms.forEach(r => r.overrides = {}); update(); });
   seg('#segUnits', v => { state.units = UNITS.v = v; update(); });
   $('#selType').addEventListener('change', e => { const v = e.target.value, r = room(); if (!r || r.type === v) return; if (r.name === ROOMS[r.type].name) r.name = ROOMS[v].name; r.type = v; r.overrides = {}; r.removed = []; sel = null; update(); });
   seg('#segView', v => {
-    const fromPlan = state.view === 'plan';
+    const fromPlan = !is3d();
     if (state.view === 'walk' && has3d) state.walk = Scene3D.pose();
-    state.view = v; if (v === 'plan') cardOpen = false; save(); renderSide(); renderList();
-    if (v !== 'plan' && fromPlan) Scene3D.regrow();
-    if (v !== 'plan') { if (sceneStale) syncScene(); Scene3D.setView(v, planOf(state.roomId) || plans[0], v === 'walk' ? state.walk : null); Scene3D.resize(); }
+    state.view = v; if (!is3d()) cardOpen = false; save(); renderSide(); renderList();
+    if (is3d() && fromPlan) Scene3D.regrow();
+    if (is3d()) { if (sceneStale) syncScene(); Scene3D.setView(v, planOf(state.roomId) || plans[0], v === 'walk' ? state.walk : null); Scene3D.resize(); }
   });
   /* The walk position is kept with the project, so the Walk tab (or a reload) returns to the same spot and view. */
   const keepPose = () => { if (state.view === 'walk' && has3d) { state.walk = Scene3D.pose(); save(); } };
@@ -263,7 +342,7 @@
     const lines = ['DRoom shopping list, ' + STYLES[state.style].name + ' style'];
     plans.forEach(p => {
       lines.push('', p.room.name + ' (' + fmtLen(p.room.W) + ' × ' + fmtLen(p.room.D) + ')');
-      p.lines.forEach(l => lines.push('- ' + l.item.name + (l.unit ? ', ' + l.qty + ' ' + l.unit : l.area ? ', ' + fmtArea(l.qty) : l.qty > 1 ? ' × ' + l.qty : '') + ', ' + fmtDims(l.item) + ', ' + money(l.item.price * l.qty)));
+      p.lines.forEach(l => lines.push('- ' + l.item.name + (l.unit ? ', ' + l.qty + ' ' + l.unit : l.area ? ', ' + fmtArea(l.qty) : l.qty > 1 ? ' × ' + l.qty : '') + ', ' + fmtDims(l.item) + ', ' + money(l.item.price * l.qty) + (l.item.store ? ', ' + l.item.supplier + (l.item.sku ? ' ' + l.item.sku : '') + (l.item.url ? ' ' + l.item.url : '') : '')));
     });
     lines.push('', 'Total: ' + money(plans.reduce((s, p) => s + p.total, 0)) + ' (budget ' + money(state.budget) + ')');
     const b = $('#btnCopy'), done = ok => { b.textContent = ok ? 'Copied' : 'Copy failed'; setTimeout(() => b.textContent = 'Copy list', 1600); };
@@ -349,6 +428,7 @@
       const r = makeRoom(b.type, Math.round(b.x * trace.width * 10) / 10, Math.round(b.y * hgt * 10) / 10, W, D);
       if (b.name) r.name = b.name; return r;
     });
+    PlanRecognizer.snapRooms(rooms);
     const cx = rooms.reduce((s, r) => s + r.x + r.W / 2, 0) / rooms.length, cy = rooms.reduce((s, r) => s + r.y + r.D / 2, 0) / rooms.length;
     const seen = {};
     rooms.forEach(r => {
@@ -413,7 +493,9 @@
   $('#btnCalOk').addEventListener('click', applyCal);
   $('#inCal').addEventListener('keydown', e => { if (e.key === 'Enter') applyCal(); });
   $('#btnTraceOff').addEventListener('click', () => { say(''); $('#calRow').hidden = true; PlanEditor.endCalibrate(); trace = null; $('#inTrace').value = ''; PlanEditor.refit(); traceUi(); PlanEditor.render(); });
-  has3d = Scene3D.init($('#cv'), $('#stage'), s => select(s, true), $('#mini'));
+  has3d = Scene3D.init($('#cv'), $('#stage'), s => select(s, true), $('#mini'), $('#dimLabels'));
+  Scene3D.setSizes(state.sizes !== false);
+  $('#btnSizes').addEventListener('click', () => { state.sizes = state.sizes === false; save(); Scene3D.setSizes(state.sizes); renderSide(); });
   /* ---------- photo render ---------- */
   /* Sends a snapshot of the current view to the DRoom server, which asks the image model for a photorealistic version.
      The page only names the style, rooms and item types; the server writes the prompt. */
@@ -447,5 +529,5 @@
   /* While walking, the room chips show the room you are standing in. */
   $('#cv').addEventListener('roomchange', e => { document.querySelectorAll('#walkRooms button').forEach(b => b.setAttribute('aria-pressed', b.dataset.id === e.detail ? 'true' : 'false')); });
   update(true); hist.push(snapshot()); hi = 0; histButtons();
-  if (state.view !== 'plan') { Scene3D.setView(state.view, planOf(state.roomId) || plans[0], state.walk); Scene3D.resize(); }
+  if (is3d()) { Scene3D.setView(state.view, planOf(state.roomId) || plans[0], state.walk); Scene3D.resize(); }
 })();

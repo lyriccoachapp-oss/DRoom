@@ -7,7 +7,7 @@ const path = require('path');
 const vm = require('vm');
 
 const ctx = vm.createContext({ document: { querySelector() { return null; } }, console });
-for (const f of ['catalog.js', 'layout.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'app', 'js', f), 'utf8'), ctx, { filename: f });
+for (const f of ['catalog.js', 'stores.js', 'layout.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'app', 'js', f), 'utf8'), ctx, { filename: f });
 const run = code => vm.runInContext(code, ctx);
 const types = run('Object.keys(ROOMS)');
 const styles = run('Object.keys(STYLES)');

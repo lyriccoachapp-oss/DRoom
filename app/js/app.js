@@ -32,6 +32,7 @@
   }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
 
+  Stores.load(localStorage);
   const state = load() || defaults();
   UNITS.v = state.units === 'm' ? 'm' : 'ft';
   let plans = [], sel = null, toast = '', has3d = false, sceneStale = true, trace = null, clash = new Set();
@@ -182,7 +183,7 @@
         const hd = el('button', 'item-head'); hd.type = 'button'; hd.setAttribute('aria-expanded', on ? 'true' : 'false');
         const sw = el('span', 'sw'); sw.style.background = l.unit && r.wallColor ? r.wallColor : hex(it.swatch);
         const mid = el('span'); mid.append(el('div', 'nm', it.name + (l.unit ? ', ' + l.qty + ' ' + l.unit : l.area ? ', ' + fmtArea(l.qty) : l.qty > 1 ? ' × ' + l.qty : '')), el('div', 'meta num', fmtDims(it)));
-        const pr = el('span', 'pr num', money(it.price * l.qty)); pr.appendChild(el('small', '', STYLES[it.style].name + ' · ' + TIERS[it.tier].name));
+        const pr = el('span', 'pr num', money(it.price * l.qty)); pr.appendChild(el('small', '', itemTag(it)));
         hd.append(sw, mid, pr); hd.addEventListener('click', () => select(on ? null : { roomId: r.id, cat: l.cat })); li.appendChild(hd);
         if (on) li.appendChild(altsFor(p, l));
         ul.appendChild(li);
@@ -209,12 +210,14 @@
       hd.appendChild(rm);
     }
     body.appendChild(hd);
+    const href = Stores.linkOf(it);
+    if (href) { const a = el('a', 'storelink', (it.url ? 'View at ' : 'Find at ') + it.supplier); a.href = href; a.target = '_blank'; a.rel = 'noopener noreferrer'; body.appendChild(a); }
     const alts = el('div', 'alts'), fit = {};
     CATALOG.filter(a => a.cat === l.cat).sort((a, b) => (a.style === state.style ? 0 : 1) - (b.style === state.style ? 0 : 1) || a.price - b.price).forEach(a => {
       const b = el('button', 'alt'); b.type = 'button';
       const ok = a.si === it.si || (fit[a.si] !== undefined ? fit[a.si] : (fit[a.si] = canFit(p, l.cat, a.si)));
       const s2 = el('span', 'sw'); s2.style.background = hex(a.swatch);
-      const m2 = el('span'); m2.append(el('div', 'nm', a.name), el('div', 'meta num', ok ? STYLES[a.style].name + ' · ' + TIERS[a.tier].name + ' · ' + fmtDims(a) : 'does not fit'));
+      const m2 = el('span'); m2.append(el('div', 'nm', a.name), el('div', 'meta num', ok ? itemTag(a) + ' · ' + fmtDims(a) : 'does not fit'));
       const dlt = (a.price - it.price) * l.qty;
       const d = el('span', 'delta num' + (dlt > 0 ? ' up' : dlt < 0 ? ' down' : ''), a.id === it.id ? 'selected' : (dlt > 0 ? '+' : dlt < 0 ? '−' : '') + money(Math.abs(dlt)));
       b.append(s2, m2, d);
@@ -257,6 +260,42 @@
     generateAll(); save(); renderSide(); renderList(); PlanEditor.render(); syncScene(); toast = '';
     if (skipHistory !== true) record();
   }
+
+  /* ---------- stores ---------- */
+  let storeTarget = null, storeMsg = '';
+  function renderStores() {
+    const box = $('#storeList'); box.textContent = '';
+    Stores.list().forEach(s => {
+      const row = el('div', 'store'), lab = el('label', 'store-name'), cb = document.createElement('input');
+      cb.type = 'checkbox'; cb.checked = s.enabled; cb.addEventListener('change', () => { Stores.setEnabled(s.id, cb.checked); storesChanged(''); });
+      lab.append(cb, el('span', '', s.name));
+      const imp = el('button', 'linkbtn ok', s.count ? 'Replace feed' : 'Import feed'); imp.type = 'button';
+      imp.addEventListener('click', () => { storeTarget = s.id; $('#storeFile').value = ''; $('#storeFile').click(); });
+      row.append(lab, el('small', 'num', s.count ? s.count + (s.count === 1 ? ' product' : ' products') + (s.updated ? ' · ' + s.updated : '') : 'no feed yet'), imp);
+      if (s.count || s.custom) { const rm = el('button', 'linkbtn', s.custom ? 'Remove' : 'Clear'); rm.type = 'button'; rm.addEventListener('click', () => { Stores.remove(s.id); storesChanged(''); }); row.appendChild(rm); }
+      box.appendChild(row);
+    });
+    const m = $('#storeMsg'); m.hidden = !storeMsg; m.textContent = storeMsg;
+  }
+  function storesChanged(msg) {
+    storeMsg = msg; if (!Stores.save(localStorage)) storeMsg += ' The feed is too large to keep in this browser, so it will be gone after a reload.';
+    renderStores(); update();
+  }
+  function importInto(id, text) {
+    try {
+      const r = Stores.importFeed(id, text), why = Object.keys(r.skipped).map(k => r.skipped[k] + ' ' + k).join('; ');
+      storesChanged('Imported ' + r.added + ' of ' + r.total + ' products.' + (why ? ' Left out: ' + why + '.' : ''));
+    } catch (e) { storeMsg = 'Could not read the feed: ' + e.message; renderStores(); }
+  }
+  $('#storeFile').addEventListener('change', e => {
+    const f = e.target.files[0]; if (!f || !storeTarget) return;
+    const fr = new FileReader(); fr.onload = () => importInto(storeTarget, String(fr.result)); fr.onerror = () => { storeMsg = 'Could not read the file.'; renderStores(); }; fr.readAsText(f);
+  });
+  $('#btnStoreAdd').addEventListener('click', () => { $('#storeAddRow').hidden = !$('#storeAddRow').hidden; if (!$('#storeAddRow').hidden) $('#inStoreName').focus(); });
+  $('#btnStoreAddOk').addEventListener('click', () => { if (Stores.add($('#inStoreName').value)) { $('#inStoreName').value = ''; $('#storeAddRow').hidden = true; storesChanged(''); } });
+  $('#btnStoreTpl').addEventListener('click', async () => flash($('#btnStoreTpl'), await saveFile('droom-feed-template.csv', Stores.TEMPLATE, 'text/csv'), 'Feed template'));
+  $('#btnStoreDemo').addEventListener('click', () => { const id = (Stores.list().find(s => s.name === 'Sample Store') || {}).id || Stores.add('Sample Store'); importInto(id, Stores.SAMPLE); });
+  renderStores();
 
   /* ---------- wiring ---------- */
   function seg(id, fn) { $(id).addEventListener('click', e => { const b = e.target.closest('button'); if (b) fn(b.dataset.v); }); }
@@ -303,7 +342,7 @@
     const lines = ['DRoom shopping list, ' + STYLES[state.style].name + ' style'];
     plans.forEach(p => {
       lines.push('', p.room.name + ' (' + fmtLen(p.room.W) + ' × ' + fmtLen(p.room.D) + ')');
-      p.lines.forEach(l => lines.push('- ' + l.item.name + (l.unit ? ', ' + l.qty + ' ' + l.unit : l.area ? ', ' + fmtArea(l.qty) : l.qty > 1 ? ' × ' + l.qty : '') + ', ' + fmtDims(l.item) + ', ' + money(l.item.price * l.qty)));
+      p.lines.forEach(l => lines.push('- ' + l.item.name + (l.unit ? ', ' + l.qty + ' ' + l.unit : l.area ? ', ' + fmtArea(l.qty) : l.qty > 1 ? ' × ' + l.qty : '') + ', ' + fmtDims(l.item) + ', ' + money(l.item.price * l.qty) + (l.item.store ? ', ' + l.item.supplier + (l.item.sku ? ' ' + l.item.sku : '') + (l.item.url ? ' ' + l.item.url : '') : '')));
     });
     lines.push('', 'Total: ' + money(plans.reduce((s, p) => s + p.total, 0)) + ' (budget ' + money(state.budget) + ')');
     const b = $('#btnCopy'), done = ok => { b.textContent = ok ? 'Copied' : 'Copy failed'; setTimeout(() => b.textContent = 'Copy list', 1600); };

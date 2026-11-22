@@ -7,8 +7,10 @@ const Scene3D = (function () {
   let walkTest = null, path = null, floors = [], lastT = 0, mini = null, hover = null, dest = null, hot = null, hotBox = null;
   let bb = { x0: 0, z0: 0, x1: 5, z1: 4 }, texes = [];
 
-  function init(c, s, pickCb, miniSvg) {
-    canvas = c; stage = s; onPick = pickCb; mini = miniSvg || null;
+  /* Size labels: text pinned to points in the scene and laid over the canvas as plain HTML. */
+  let labelBox = null, dims = [], showSizes = true, labelPool = [];
+  function init(c, s, pickCb, miniSvg, labelsEl) {
+    canvas = c; stage = s; onPick = pickCb; mini = miniSvg || null; labelBox = labelsEl || null;
     if (typeof THREE === 'undefined') return false;
     let renderer;
     try { renderer = new THREE.WebGLRenderer({ canvas, antialias: true }); } catch (e) { return false; }
@@ -116,7 +118,7 @@ const Scene3D = (function () {
   function build(p, style) {
     plans = p;
     if (!T) return;
-    clearGroup(T.roomG); clearGroup(T.furnG); walls = []; floors = []; path = null; if (dest) dest.visible = false; hot = null; if (hotBox) { T.scene.remove(hotBox); hotBox = null; }
+    clearGroup(T.roomG); clearGroup(T.furnG); walls = []; floors = []; dims = []; path = null; if (dest) dest.visible = false; hot = null; if (hotBox) { T.scene.remove(hotBox); hotBox = null; }
     texes.forEach(t => t.dispose()); texes = [];
     if (!plans.length) { T.dirty = true; return; }
     const S = STYLES[style];
@@ -138,6 +140,13 @@ const Scene3D = (function () {
       wallSegments(r).forEach(seg => g.add(buildWall(r, o, seg, wmr, white, S)));
       T.roomG.add(g);
       const byCat = {}; pl.lines.forEach(l => byCat[l.cat] = l.item);
+      /* what gets a size label: each kind of furniture once, the door, the window and every wall */
+      const seenCat = {};
+      pl.placed.forEach(q => { const it = byCat[q.cat]; if (!it || seenCat[q.cat]) return; seenCat[q.cat] = 1; dims.push({ roomId: o.id, kind: 'item', cat: q.cat, p: [o.x + q.cx, (q.cat === 'uppers' ? 2.2 : q.h) + 0.14, o.y + q.cz], text: CATS[q.cat].name.split(' with ')[0] + ' ' + fmtDims(it) }); });
+      const dn = WALLS[r.door.wall].n, dp = wallPoint(r, r.door.wall, r.door.t), wn = WALLS[r.win.wall].n, wp = wallPoint(r, r.win.wall, r.win.t);
+      dims.push({ roomId: o.id, kind: 'open', p: [o.x + dp[0] + dn[0] * 0.1, 2.18, o.y + dp[1] + dn[1] * 0.1], text: 'Door ' + fmtLen(r.door.width) + ' \u00d7 ' + fmtLen(2.03) });
+      dims.push({ roomId: o.id, kind: 'open', p: [o.x + wp[0] + wn[0] * 0.1, 2.34, o.y + wp[1] + wn[1] * 0.1], text: 'Window ' + fmtLen(1.4) + ' \u00d7 ' + fmtLen(1.3) });
+      wallSegments(r).forEach(sg => { const L = Math.hypot(sg.b[0] - sg.a[0], sg.b[1] - sg.a[1]); if (L < 0.6) return; dims.push({ roomId: o.id, kind: 'wall', p: [o.x + (sg.a[0] + sg.b[0]) / 2 + sg.n[0] * 0.12, 0, o.y + (sg.a[1] + sg.b[1]) / 2 + sg.n[1] * 0.12], text: fmtLen(L) }); });
       pl.placed.forEach(q => {
         const it = byCat[q.cat]; if (!it) return;
         const fg = new THREE.Group(); BUILD[it.cat](fg, it);
@@ -185,13 +194,41 @@ const Scene3D = (function () {
     const r = pl.r, o = pl.room, n = WALLS[r.door.wall].n, pt = wallPoint(r, r.door.wall, r.door.t), q = maxRects(r)[0];
     const mx = o.x + (q.x0 + q.x1) / 2, mz = o.y + (q.z0 + q.z1) / 2;
     cam.x = o.x + pt[0] + n[0] * 0.8; cam.z = o.y + pt[1] + n[1] * 0.8;
-    if (!inside(cam.x, cam.z)) { cam.x = mx; cam.z = mz; }
+    if (!inside(cam.x, cam.z)) {
+      /* the nearest free spot in the room to the doorway, so nobody starts on a bed or inside a cabinet */
+      let best = null, bd = Infinity;
+      for (let z = o.y + 0.25; z <= o.y + r.D - 0.25; z += 0.15) for (let x = o.x + 0.25; x <= o.x + r.W - 0.25; x += 0.15) {
+        if (!inside(x, z)) continue; const d = (x - cam.x) * (x - cam.x) + (z - cam.z) * (z - cam.z); if (d < bd) { bd = d; best = [x, z]; }
+      }
+      if (best) { cam.x = best[0]; cam.z = best[1]; } else { cam.x = mx; cam.z = mz; }
+    }
     cam.yaw = Math.hypot(mx - cam.x, mz - cam.z) > 0.3 ? Math.atan2(-(mx - cam.x), -(mz - cam.z)) : Math.atan2(n[0], n[1]);
     cam.pitch = -0.06; cam.roomId = o.id; path = null; if (dest) dest.visible = false;
     if (canvas) canvas.dispatchEvent(new CustomEvent('roomchange', { detail: o.id }));
     if (T) T.dirty = true; drawMini();
   }
   /* Entering the walk view puts you back where you last stood, if that spot still exists; otherwise at the room's door. */
+  /* Walking shows every size in the room you stand in; the overview shows wall lengths and the piece under the pointer or selected. */
+  const tmpV = typeof THREE !== 'undefined' ? new THREE.Vector3() : null;
+  function placeLabels() {
+    if (!labelBox) return;
+    let n = 0;
+    if (showSizes && (view === 'walk' || view === 'orbit')) {
+      const w = canvas.clientWidth, h = canvas.clientHeight, walk = view === 'walk';
+      for (const d of dims) {
+        if (walk ? d.roomId !== cam.roomId : (d.kind === 'open' || (d.kind === 'item' && !((hot && hot.roomId === d.roomId && hot.cat === d.cat) || (sel && sel.roomId === d.roomId && sel.cat === d.cat))))) continue;
+        tmpV.set(d.p[0], d.kind === 'wall' ? (walk ? 2.52 : 0.2) : d.p[1], d.p[2]);
+        if (walk && Math.hypot(tmpV.x - cam.x, tmpV.z - cam.z) < 0.45) continue;
+        tmpV.project(T.camera);
+        if (tmpV.z > 1 || tmpV.z < -1 || Math.abs(tmpV.x) > 0.96 || Math.abs(tmpV.y) > 0.94) continue;
+        let e = labelPool[n]; if (!e) { e = document.createElement('span'); labelBox.appendChild(e); labelPool[n] = e; }
+        if (e.textContent !== d.text) e.textContent = d.text;
+        e.className = 'dim ' + d.kind; e.style.transform = 'translate(-50%,-50%) translate(' + ((tmpV.x + 1) / 2 * w).toFixed(1) + 'px,' + ((1 - tmpV.y) / 2 * h).toFixed(1) + 'px)'; e.hidden = false; n++;
+      }
+    }
+    for (let i = n; i < labelPool.length; i++) labelPool[i].hidden = true;
+  }
+  function setSizes(on) { showSizes = !!on; if (T) T.dirty = true; placeLabels(); }
   function setView(v, pl, pose) {
     view = v;
     if (v === 'walk') {
@@ -280,7 +317,7 @@ const Scene3D = (function () {
         T.dirty = true; onMoved();
       }
     }
-    if (canvas.clientWidth && (T.dirty || T.growing)) { T.dirty = false; placeCamera(); T.growing = animateWalls(); T.renderer.render(T.scene, T.camera); }
+    if (canvas.clientWidth && (T.dirty || T.growing)) { T.dirty = false; placeCamera(); T.growing = animateWalls(); T.renderer.render(T.scene, T.camera); placeLabels(); }
   }
   /* Which room you are in, for the mini-map and for re-entering after an edit. */
   function onMoved() {
@@ -378,5 +415,5 @@ const Scene3D = (function () {
     return { image: c.toDataURL('image/jpeg', 0.92), shape, view: view === 'walk' ? 'walk' : 'orbit', roomId: cam.roomId };
   }
   function regrow() { wallMemo = {}; walls.forEach(wl => { wl.cur = 0.02; wl.g.scale.y = 0.02; }); if (T) T.growing = true; }
-  return { init, build, setView, setSelected, resize, hold, regrow, goRoom, walkTo, pose, snapshot, refresh: function () { if (T) T.dirty = true; } };
+  return { init, build, setView, setSelected, resize, hold, regrow, goRoom, walkTo, pose, snapshot, setSizes, refresh: function () { if (T) T.dirty = true; } };
 })();
