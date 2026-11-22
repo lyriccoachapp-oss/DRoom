@@ -256,3 +256,30 @@ test('walking: furniture is solid and the way round it is found', () => {
   const d = p.r.doorRect, path = run(`findPath(walkArea(__fp), [${d.cx}, ${d.cz}], [${bed.cx + bed.hx + 0.45}, ${bed.cz}])`) || run(`findPath(walkArea(__fp), [${d.cx}, ${d.cz}], [${bed.cx - bed.hx - 0.45}, ${bed.cz}])`);
   assert.ok(path && path.length, 'you can walk from the door to the side of the bed');
 });
+
+test('nothing stands where wardrobe doors and dresser drawers open', () => {
+  let seen = 0;
+  for (const W of [3, 3.6, 4.2, 5, 6]) for (const D of [3, 3.6, 4.2, 5, 6]) for (const dw of walls) for (const ww of ['N', 'E']) {
+    const p = plan('bedroom', W, D, dw, ww, 1e6);
+    for (const q of p.placed.filter(x => x.clear)) {
+      seen++;
+      assert.ok(q.clear.hx * 2 > 0.4 && q.clear.hz * 2 > 0.4);
+      for (const o of p.placed) if (o !== q && !o.flat) assert.ok(!overlaps(o, q.clear), `bedroom ${W}x${D} door ${dw}: ${o.cat} stands in front of the ${q.cat}`);
+    }
+  }
+  assert.ok(seen > 100);
+});
+
+test('a neighbouring room\'s door keeps the floor clear on this side too', () => {
+  const living = { id: 'a', name: 'Living', type: 'living', x: 0, y: 0, W: 5.4, D: 4.2, doorWall: 'E', doorPos: 0.7, winWall: 'W', winPos: 0.5, overrides: {}, removed: [] };
+  for (const pos of [0.2, 0.5, 0.8]) for (const swing of ['in', 'out']) {
+    const kitchen = { id: 'b', name: 'Kitchen', type: 'kitchen', x: 0, y: 4.2, W: 5.4, D: 3.2, doorWall: 'N', doorPos: pos, doorSwing: swing, winWall: 'S', winPos: 0.5, overrides: {}, removed: [] };
+    ctx.__rooms = [living, kitchen];
+    const p = run('planRoom(__rooms[0], "scandi", 1e6, [], __rooms)');
+    const zone = p.r.keepClear.find(z => z.foreign);
+    assert.ok(zone, 'the kitchen door is known to the living room');
+    assert.ok(zone.hz * 2 >= (swing === 'out' ? 0.9 : 0.69));
+    for (const q of p.placed) if (!q.flat) assert.ok(!overlaps(q, zone), `${q.cat} blocks the kitchen door (pos ${pos}, ${swing})`);
+    assert.ok(!run('planRoom(__rooms[1], "scandi", 1e6, [], __rooms)').r.keepClear.some(z => z.foreign), 'the living room door opens onto the hall side, not the kitchen');
+  }
+});

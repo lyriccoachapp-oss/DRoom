@@ -43,7 +43,7 @@
 
   function generateAll() {
     const wsum = state.rooms.reduce((s, r) => s + ROOMS[r.type].weight, 0) || 1, notes = [];
-    plans = state.rooms.map(r => planRoom(r, state.style, Math.round(state.budget * ROOMS[r.type].weight / wsum), notes));
+    plans = state.rooms.map(r => planRoom(r, state.style, Math.round(state.budget * ROOMS[r.type].weight / wsum), notes, state.rooms));
     if (notes.length) toast = notes.join(' ');
     if (sel) { const p = planOf(sel.roomId); if (!p || !p.lines.some(l => l.cat === sel.cat)) sel = null; }
     if (!room() && state.rooms.length) state.roomId = state.rooms[0].id;

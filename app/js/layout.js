@@ -79,7 +79,7 @@ function doorOf(room){
 }
 
 /* Geometry of one room: door and window positions clamped to their walls, plus the zones they keep clear. */
-function roomGeom(room){
+function roomGeom(room,others){
   const r={W:room.W,D:room.D};
   r.cutBox=cutOf(room);
   r.cutRect=r.cutBox?{cx:(r.cutBox.x0+r.cutBox.x1)/2,cz:(r.cutBox.z0+r.cutBox.z1)/2,hx:r.cutBox.w/2,hz:r.cutBox.d/2}:null;
@@ -105,13 +105,28 @@ function roomGeom(room){
   r.keepClear=[r.doorRect];
   if(dd.type==='barn')r.keepClear.push(at(r,r.door.wall,r.door.t+(dd.side==='left'?-w:w),0.09,w,0.18));
   r.winRect=at(r,r.win.wall,r.win.t,0.2,1.4,0.4);
+  /* Doors of neighbouring rooms that open onto this one: the far side of each needs the same clear floor,
+     a full sweep when the leaf swings out of its own room and a passage otherwise. */
+  (others||[]).forEach(o=>{
+    if(o===room||o.id===room.id)return;
+    const g=roomGeom(o),d=g.door,p=wallPoint(g,d.wall,d.t),n=WALLS[d.wall].n,hz=WALLS[d.wall].horiz;
+    const dep=d.type==='swing'&&d.swing==='out'?d.width+0.1:0.7,half=(d.width+0.1)/2;
+    const z={cx:o.x+p[0]-n[0]*(dep/2+0.05)-room.x,cz:o.y+p[1]-n[1]*(dep/2+0.05)-room.y,hx:hz?half:dep/2,hz:hz?dep/2:half,foreign:true};
+    /* Only where the door really lands on this room's floor, not merely beside its wall. */
+    const mx=Math.min(z.cx+z.hx,r.W)-Math.max(z.cx-z.hx,0),mz=Math.min(z.cz+z.hz,r.D)-Math.max(z.cz-z.hz,0);
+    if(mx>0.3&&mz>0.3&&!(r.cutRect&&Math.abs(z.cx-r.cutRect.cx)<r.cutRect.hx&&Math.abs(z.cz-r.cutRect.cz)<r.cutRect.hz))r.keepClear.push(z);
+  });
   return r;
 }
 function runLayout(r,want,forced){
   const placed=[];
-  const fits=(rect,h)=>inRoom(r,rect)&&!r.keepClear.some(z=>overlap(rect,z))&&!(h>0.85&&overlap(rect,r.winRect))&&placed.every(p=>p.flat||!overlap(rect,p,0.04));
+  /* Floor that a placed piece needs in front of it to be used: wardrobe doors, drawers, an oven or fridge door, standing room at a vanity.
+     Later pieces stay out of it, the same way they stay out of the room door's swing. */
+  const NEEDS_FRONT={wardrobe:1,dresser:1,shelf:1,sideboard:1,cabrun:1,range:1,fridge:1,vanity:1,toilet:1,tub:1,bathcab:1};
+  const fits=(rect,h)=>inRoom(r,rect)&&!r.keepClear.some(z=>overlap(rect,z))&&!(h>0.85&&overlap(rect,r.winRect))&&placed.every(p=>p.flat||(!overlap(rect,p,0.04)&&!(!tight&&p.clear&&overlap(rect,p.clear))));
+  let tight=false; /* set while a piece the room cannot do without is squeezed into a room too small to keep every front clear */
   const clearOk=c=>!c||placed.every(p=>p.flat||!overlap(c,p));
-  const add=(cat,si,rect,extra)=>{const sz=CATS[cat].sizes[si];const p=Object.assign({cat,si,w:sz[0],d:sz[1],h:sz[2]},rect,extra||{});placed.push(p);return p;};
+  const add=(cat,si,rect,extra)=>{const sz=CATS[cat].sizes[si];const p=Object.assign({cat,si,w:sz[0],d:sz[1],h:sz[2]},rect,extra||{});if(!NEEDS_FRONT[cat])delete p.clear;placed.push(p);return p;};
   const sizes=cat=>forced[cat]!=null?[forced[cat]]:CATS[cat].sizes.map((_,i)=>i).reverse();
   const dims=(cat,si)=>CATS[cat].sizes[si];
   function onWall(w,iw,id,h,pref,gap,front){
@@ -122,7 +137,7 @@ function runLayout(r,want,forced){
     for(const t of ts){
       const rect=at(r,w,t,gap+id/2,iw,id);
       const clr=front?at(r,w,t,gap+id+front/2,iw,front):null;
-      if(fits(rect,h)&&clearOk(clr)){rect.gap=gap;return rect;}
+      if(fits(rect,h)&&clearOk(clr)){rect.gap=gap;if(clr)rect.clear=clr;return rect;}
     }
     return null;
   }
@@ -138,11 +153,12 @@ function runLayout(r,want,forced){
     cs.sort((a,b)=>nearWindow?dist(a)-dist(b):dist(b)-dist(a));
     for(const c of cs){const east=c[0]>r.W/2,south=c[1]>r.D/2,rect={cx:c[0],cz:c[1],hx:sz[0]/2,hz:sz[1]/2,rot:east?(south?Math.PI:-Math.PI/2):(south?Math.PI/2:0)};if(fits(rect,h)){add(cat,si,rect);return;}}
   }
-  function byWalls(cat,walls,front){
+  function byWalls(cat,walls,front,must){
     if(!want.has(cat))return;
     for(const si of sizes(cat)){const sz=dims(cat,si);
       for(const w of walls){const rect=onWall(w,sz[0],sz[1],sz[2],doorT(w),0.02,front);if(rect){add(cat,si,rect);return;}}
     }
+    if(must&&!tight){tight=true;byWalls(cat,walls,front);tight=false;}
   }
   const all=['W','E','N','S'];
   const eff=w=>{const g=sideRange(r,w);return g[1]-g[0];},mid=w=>{const g=sideRange(r,w);return (g[0]+g[1])/2;};
@@ -238,13 +254,13 @@ function runLayout(r,want,forced){
     const put=(cat,si)=>{const sz=dims(cat,si);
       for(let sh=0;sh<=1.2;sh+=0.1){const c=cur+sh;if(c+sz[0]>s1-0.04)break;
         const rect=at(r,kw,pos(c+sz[0]/2),0.02+sz[1]/2,sz[0],sz[1]);
-        if(fits(rect,sz[2])){rect.gap=0.02;cur=c+sz[0]+0.05;return add(cat,si,rect);}}
+        if(fits(rect,sz[2])){rect.gap=0.02;rect.clear=at(r,kw,rect.t,0.02+sz[1]+0.3,sz[0],0.6);cur=c+sz[0]+0.05;return add(cat,si,rect);}}
       return null;};
     const rangeW=want.has('range')?dims('range',0)[0]+0.05:0;
     let run=null;
     for(const si of sizes('cabrun')){if(cur+dims('cabrun',si)[0]+rangeW>s1-0.04)continue;run=put('cabrun',si);if(run)break;}
     if(want.has('range'))put('range',sizes('range')[0]);
-    if(want.has('fridge')&&!put('fridge',sizes('fridge')[0]))byWalls('fridge',all.filter(w=>w!==kw),0.6);
+    if(want.has('fridge')&&!put('fridge',sizes('fridge')[0]))byWalls('fridge',all.filter(w=>w!==kw),0.6,true);
     if(run&&want.has('uppers')&&(forced.uppers==null||forced.uppers===run.si)){
       const sz=dims('uppers',run.si),rect=at(r,kw,run.t,0.02+sz[1]/2,sz[0],sz[1]);
       if(!overlap(rect,r.winRect))add('uppers',run.si,rect,{flat:true});}
@@ -255,7 +271,7 @@ function runLayout(r,want,forced){
     const order=all.slice().sort((a,b)=>(a===r.door.wall?1:0)-(b===r.door.wall?1:0));
     byWalls('tub',order,0.5);
     byWalls('vanity',order,0.55);
-    byWalls('toilet',order,0.5);
+    byWalls('toilet',order,0.5,true);
     if(!placed.some(p=>p.cat==='tub'))corner('shower',2,false);
     byWalls('bathcab',order,0.45);
   }
@@ -267,9 +283,9 @@ function runLayout(r,want,forced){
    Returns {room, r, placed, lines, excluded, total, budget, notes}. */
 /* Paint for the walls: two coats over the wall area less the door and window. */
 function paintGallons(r){const wall=2*(r.W+r.D)*2.7-r.door.width*2.05-1.4*1.3;return Math.max(1,Math.ceil(wall*2/37-0.05));}
-function planRoom(room,style,budget,notes){
+function planRoom(room,style,budget,notes,others){
   notes=notes||[];
-  const r=roomGeom(room),spec0=ROOMS[room.type],paint=/^#[0-9a-f]{6}$/i.test(room.wallColor||'');
+  const r=roomGeom(room,others),spec0=ROOMS[room.type],paint=/^#[0-9a-f]{6}$/i.test(room.wallColor||'');
   /* A chosen wall colour adds paint to the room, as a required line. */
   const spec={all:spec0.all.concat(paint?['paint']:[]),required:spec0.required.concat(paint?['paint']:[])};
   const forced={};
@@ -278,7 +294,7 @@ function planRoom(room,style,budget,notes){
   let placed=runLayout(r,want,forced);
   for(const c in forced){if(want.has(c)&&!placed.some(p=>p.cat===c)){
     notes.push(BYID[room.overrides[c]].name+' does not fit in '+room.name+'. A different size was chosen.');
-    delete room.overrides[c];return planRoom(room,style,budget,notes);}}
+    delete room.overrides[c];return planRoom(room,style,budget,notes,others);}}
   const area=Math.ceil(r.area*1.1*10)/10;
   const has=c=>CATS[c].area||CATS[c].unit||placed.some(p=>p.cat===c);
   const excluded=[];
