@@ -40,3 +40,18 @@ Columns (the usual spellings are accepted, e.g. `title`, `product_type`, `width_
 | `price_unit`, `coverage_sqft`, `price_per_sqft` | flooring and tile need a price per sq ft, or a box price with its coverage |
 
 A product is placed in the smallest layout size it fits inside. Rows the planner cannot use are counted by reason in the import message.
+
+## Collecting Home Depot finishing materials
+
+`tools/collect-homedepot.js` builds a feed of tile, flooring, wallpaper and paint through SerpApi's Home Depot engines
+(the provider the CRM already uses). It needs `SERPAPI_KEY`; every search page and every product costs one request, and
+answers are cached under `catalog/.cache-homedepot` so reruns are free for products already seen.
+
+```bash
+SERPAPI_KEY=... node tools/collect-homedepot.js --kinds tile,floor --pages 2 --images catalog/img
+```
+
+`tools/specs.js` turns a title and a specification table into piece size, box coverage, colour, finish and use.
+The result, `catalog/homedepot.json`, is imported in the planner under Stores, The Home Depot. Floor tile and flooring are
+used now (piece size, price per sq ft, boxes to buy, tile drawn at its real size); wall tile and wallpaper are collected
+but wait until walls take finishes. `catalog/` is not committed.

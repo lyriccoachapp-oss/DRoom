@@ -49,6 +49,7 @@ const Stores = (function () {
     category: ['droomcategory', 'category', 'producttype', 'type', 'categoryname', 'breadcrumb', 'department', 'googleproductcategory'],
     price: ['saleprice', 'currentprice', 'price', 'regularprice', 'retailprice'],
     w: ['width', 'w', 'productwidth', 'assembledwidth'], d: ['depth', 'd', 'productdepth', 'assembleddepth', 'length', 'productlength'], h: ['height', 'h', 'productheight', 'assembledheight'],
+    tw: ['tilewidth', 'plankwidth', 'piecewidth'], tl: ['tilelength', 'planklength', 'piecelength'],
     dims: ['dimensions', 'size', 'productdimensions'], unit: ['unit', 'dimunit', 'dimensionunit', 'units', 'sizeunit'],
     url: ['url', 'link', 'producturl', 'productlink', 'buyurl', 'deeplink'], image: ['image', 'imageurl', 'imagelink', 'thumbnail'],
     color: ['color', 'colour', 'finish'], style: ['style'], priceUnit: ['priceunit', 'soldby', 'unitofmeasure', 'uom'],
@@ -61,7 +62,7 @@ const Stores = (function () {
     for (const a of ALIAS[name]) for (const k of keys) {
       const n = norm(k); if (row[k] === '' || row[k] == null) continue;
       if (n === a) return { v: row[k], unit: null };
-      if (name === 'w' || name === 'd' || name === 'h') for (const u of ['inches', 'inch', 'in', 'cm', 'mm', 'ft', 'm']) if (n === a + u) return { v: row[k], unit: u };
+      if (name === 'w' || name === 'd' || name === 'h' || name === 'tw' || name === 'tl') for (const u of ['inches', 'inch', 'in', 'cm', 'mm', 'ft', 'm']) if (n === a + u) return { v: row[k], unit: u };
     }
     return null;
   }
@@ -71,7 +72,7 @@ const Stores = (function () {
   /* ---------- mapping onto the planner ---------- */
   /* First match wins, so the specific phrases come before the general ones. */
   const KEYWORDS = [
-    [/toilet (seat|paper|brush)|range hood|bed(ding| sheet| linen| skirt)|shower (curtain|head|rod)|bath mat|lamp shade|table lamp|desk lamp/, null],
+    [/wall ?paper|wall ?tiles?|backsplash|wall ?covering|toilet (seat|paper|brush)|range hood|bed(ding| sheet| linen| skirt)|shower (curtain|head|rod)|bath mat|lamp shade|table lamp|desk lamp/, null],
     [/night ?stand|bedside/, 'nightstand'], [/tv (stand|bench|unit|console)|media (console|unit|stand)/, 'tvstand'],
     [/coffee table/, 'coffee'], [/dining table|kitchen table/, 'dtable'], [/dining chair|kitchen chair/, 'dchair'],
     [/office chair|desk chair|swivel chair|task chair/, 'ochair'], [/kitchen island/, 'island'], [/\bdesks?\b/, 'desk'],
@@ -120,9 +121,13 @@ const Stores = (function () {
     if (C.area) {
       /* Flooring and tile are priced per square metre; feeds quote a square foot or a box. */
       const per = num(get('perSqft')), cov = num(get('coverage')), pu = String(get('priceUnit')).toLowerCase();
-      let m2 = per > 0 ? per * 10.7639 : /m2|m²|sq\.? ?m/.test(pu) ? price : /sq\.? ?ft|sqft|ft2|square f/.test(pu) ? price * 10.7639 : cov > 0 && price > 0 ? price / cov * 10.7639 : NaN;
+      let m2 = /box|case|carton/.test(pu) && cov > 0 && price > 0 ? price / cov * 10.7639 : per > 0 ? per * 10.7639 : /m2|m²|sq\.? ?m/.test(pu) ? price : /sq\.? ?ft|sqft|ft2|square f/.test(pu) ? price * 10.7639 : cov > 0 && price > 0 ? price / cov * 10.7639 : NaN;
       if (!(m2 > 0)) return { skip: 'no price per sq ft or coverage per box' };
       Object.assign(it, { price: Math.round(m2 * 100) / 100, si: 0, w: 0, d: 0, h: 0 });
+      /* Size of one tile or plank and the floor one box covers, when the feed has them. */
+      const fa = field(row, 'tw'), fb = field(row, 'tl');
+      if (fa && fb) { const a = num(fa.v) * (UNIT_M[fa.unit || unitOf(fa.v) || store.dimUnit] || 0.0254), b = num(fb.v) * (UNIT_M[fb.unit || unitOf(fb.v) || store.dimUnit] || 0.0254); if (a > 0.01 && b > 0.01 && a < 4 && b < 4) { it.tw = Math.min(a, b); it.tl = Math.max(a, b); } }
+      if (cov > 0) it.cover = Math.round(cov / 10.7639 * 1000) / 1000;
     } else {
       if (!(price > 0)) return { skip: 'no price' };
       it.price = Math.round(price * 100) / 100;

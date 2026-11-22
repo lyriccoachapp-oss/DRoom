@@ -12,6 +12,7 @@ function fmtLen(m) {
 }
 function fmtDims(it) {
   if (CATS[it.cat].unit) return money(it.price) + ' / ' + CATS[it.cat].unit;
+  if (CATS[it.cat].area && it.tw) { const k = UNITS.v === 'm' ? 100 : 1 / 0.0254, r = v => Math.round(v * k * 10) / 10; return r(it.tw) + ' × ' + r(it.tl) + (UNITS.v === 'm' ? ' cm · ' + money(it.price) + ' / m²' : ' in · $' + (it.price / 10.7639).toFixed(2) + ' / ft²'); }
   if (CATS[it.cat].area) return UNITS.v === 'm' ? money(it.price) + ' / m\u00b2' : '$' + (it.price / 10.7639).toFixed(2) + ' / ft\u00b2';
   const f = UNITS.v === 'm' ? v => Math.round(v * 100) : v => Math.round(v / 0.0254), u = UNITS.v === 'm' ? ' cm' : ' in';
   return it.cat === 'rug' ? f(it.d) + ' × ' + f(it.w) + u : f(it.w) + ' × ' + f(it.d) + ' × ' + f(it.h) + u;
@@ -106,3 +107,5 @@ for (const cat in CATS) {
     }
   }
 }
+/* Boxes to buy for an area line, when the product says how much one box covers. */
+function boxesFor(l) { return l.area && l.item.cover > 0 ? Math.ceil(l.qty / l.item.cover - 1e-9) : 0; }
