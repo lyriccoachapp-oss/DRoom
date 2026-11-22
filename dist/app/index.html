@@ -89,9 +89,9 @@ input[type=file]{max-width:100%; font-size:13px}
 .rooms small{font-weight:500; color:var(--muted)}
 
 .stage{position:relative; background:var(--stage); border:1px solid var(--line); border-radius:12px; overflow:hidden; min-height:0}
-.stage canvas,.stage #plan{position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none}
+.stage canvas,.stage #plan,.stage #drawing{position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none}
 .stage canvas{cursor:grab}
-.views{position:absolute; top:10px; left:10px; width:min(280px, calc(100% - 20px))}
+.views{position:absolute; top:10px; left:10px; width:min(350px, calc(100% - 20px))}
 .views .seg{background:var(--panel); border:1px solid var(--line)}
 .views .seg button[aria-pressed="true"]{background:var(--sun); color:var(--sun-ink); box-shadow:none}
 .cap{position:absolute; left:10px; right:10px; bottom:10px; display:flex; justify-content:space-between; align-items:flex-end; gap:10px; pointer-events:none; flex-wrap:wrap}
@@ -107,6 +107,12 @@ input[type=file]{max-width:100%; font-size:13px}
 .mdoor{stroke:var(--sun); stroke-width:.22}
 .mdot{fill:var(--accent); stroke:var(--panel); stroke-width:.08}
 .mcone{fill:var(--accent); opacity:.28}
+.dims3d{position:absolute; inset:0; overflow:hidden; pointer-events:none}
+.dim{position:absolute; left:0; top:0; white-space:nowrap; font-size:11.5px; font-weight:600; font-variant-numeric:tabular-nums; padding:2px 7px; border-radius:999px; background:var(--panel); color:var(--ink); border:1px solid var(--line); box-shadow:0 1px 3px rgba(0,0,0,.18)}
+.dim.wall{background:var(--ink); color:var(--panel); border-color:var(--ink)}
+.dim.open{border-color:var(--plan-win)}
+.sizesbtn{position:absolute; top:54px; right:10px; padding:7px 12px; background:var(--panel); box-shadow:0 2px 8px rgba(0,0,0,.14); z-index:1}
+.sizesbtn[aria-pressed="true"]{background:var(--ink); color:var(--panel); border-color:var(--ink)}
 .renderbtn{position:absolute; top:10px; right:10px; padding:9px 14px; box-shadow:0 2px 8px rgba(0,0,0,.16); z-index:1}
 .renderpane{position:absolute; inset:0; z-index:3; background:var(--panel); display:flex; flex-direction:column; gap:10px; padding:12px}
 .rp-top{display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap}
@@ -173,6 +179,12 @@ input[type=file]{max-width:100%; font-size:13px}
 .item-body .hd{display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:12px; color:var(--muted)}
 .linkbtn{border:0; background:transparent; color:var(--warn); padding:2px 0; font-size:12.5px; text-decoration:underline}
 .linkbtn.ok{color:var(--accent)}
+.stores{display:flex; flex-direction:column; gap:8px}
+.store{display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; font-size:13px}
+.store-name{display:flex; align-items:center; gap:8px; font-weight:600; flex:1 1 100%}
+.store-name input{accent-color:var(--accent)}
+.store small{color:var(--muted); flex:1}
+.storelink{display:inline-block; margin:0 0 8px; font-size:12.5px; font-weight:600; color:var(--accent)}
 .alts{display:flex; flex-direction:column; gap:4px; max-height:250px; overflow:auto}
 .alt{display:grid; grid-template-columns:18px minmax(0,1fr) auto; gap:8px; align-items:center; padding:6px 8px; border:1px solid transparent; border-radius:8px; background:var(--panel); text-align:left; width:100%}
 .alt:hover:not(:disabled){border-color:var(--accent)}
@@ -185,6 +197,7 @@ input[type=file]{max-width:100%; font-size:13px}
 .delta.up{color:var(--warn)} .delta.down{color:var(--good)}
 .out{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:3px; font-size:12.5px; color:var(--muted)}
 .out li{display:flex; justify-content:space-between; gap:10px; align-items:baseline}
+.item.tk{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:center; padding:8px 10px}
 .toast{font-size:12.5px; color:var(--warn); margin:0}
 
 @media (max-width:1040px){
@@ -256,6 +269,22 @@ input[type=file]{max-width:100%; font-size:13px}
         </div>
         <p class="note">Load a picture of your plan, then let the planner find the rooms. Set the scale by clicking the two ends of a wall you know the length of. Pictures and PDFs (first page) work; the file is not saved with the project.</p>
       </div>
+      <div class="grp" id="storeGrp">
+        <h2>Stores</h2>
+        <div id="storeList" class="stores"></div>
+        <div class="btnrow"><button type="button" class="btn" id="btnStoreAdd">+ Store</button><button type="button" class="btn" id="btnStoreTpl">Feed template</button><button type="button" class="btn" id="btnStoreDemo">Try a sample feed</button></div>
+        <div class="row" id="storeAddRow" hidden><label for="inStoreName">Name</label><input id="inStoreName" type="text" maxlength="40" autocomplete="off"><button type="button" class="btn" id="btnStoreAddOk">Add</button></div>
+        <input type="file" id="storeFile" accept=".csv,.tsv,.txt,.json,text/csv,application/json" hidden>
+        <p class="toast" id="storeMsg" hidden></p>
+        <p class="note">Import a product feed (CSV or JSON) for each store. Products from stores that are switched on replace the sample catalog wherever they fit the room and the budget.</p>
+      </div>
+      <div class="grp" id="buildGrp" hidden>
+        <h2>Construction</h2>
+        <div class="row"><label for="selBH">Walls</label><select id="selBH"><option value="8">8 ft high</option><option value="9">9 ft high</option><option value="10">10 ft high</option></select></div>
+        <div class="row"><label for="selBS">Studs</label><select id="selBS"><option value="16">16 in on centre</option><option value="24">24 in on centre</option></select></div>
+        <div class="row"><label for="selBF">Base</label><select id="selBF"><option value="frost">Frost wall and slab</option><option value="slab">Slab on grade</option></select></div>
+        <div class="row"><label for="selBSlab">Slab</label><select id="selBSlab"><option value="4">4 in thick</option><option value="5">5 in thick</option><option value="6">6 in thick</option></select></div>
+      </div>
       <button type="button" class="btn" id="btnReset">Redo the whole design</button>
       <p class="note">In Plan view, drag a room to move it, the orange corner to resize it, and the round markers to move its door and window.</p>
     </div>
@@ -264,14 +293,18 @@ input[type=file]{max-width:100%; font-size:13px}
   <section class="stage" id="stage" aria-label="Plan and 3D view">
     <svg id="plan" role="img" aria-label="Floor plan editor"></svg>
     <canvas id="cv" hidden></canvas>
+    <svg id="drawing" role="img" aria-label="Dimensioned floor plan" hidden></svg>
     <div class="views">
       <div class="seg" id="segView">
         <button type="button" data-v="plan">Plan</button>
         <button type="button" data-v="orbit">3D</button>
         <button type="button" data-v="walk">Walk</button>
+        <button type="button" data-v="build">Build</button>
       </div>
     </div>
+    <div class="dims3d" id="dimLabels" aria-hidden="true"></div>
     <button type="button" class="btn primary renderbtn" id="btnRender" hidden>Photo render</button>
+    <button type="button" class="btn sizesbtn" id="btnSizes" aria-pressed="true" hidden>Sizes</button>
     <section class="renderpane" id="renderPane" aria-label="Photo render" hidden>
       <div class="rp-top"><strong id="rpTitle">Photo render</strong><span class="rp-actions"><button type="button" class="btn" id="rpCompare" hidden>Hold to compare</button><button type="button" class="btn primary" id="rpClose">Back to the 3D view</button></span></div>
       <div class="rp-body"><img id="rpImg" alt="Photorealistic render of the current view"><p class="rp-msg" id="rpMsg"></p></div>
@@ -293,8 +326,17 @@ input[type=file]{max-width:100%; font-size:13px}
     <div class="cap"><span id="hint"></span><span class="dims num" id="homeDims"></span></div>
   </section>
 
-  <aside class="pane" aria-label="Shopping list">
-    <div class="pane-in">
+  <aside class="pane" aria-label="Shopping list and construction takeoff">
+    <div class="pane-in" id="buildPane" hidden>
+      <div class="grp">
+        <h2>Construction takeoff</h2>
+        <p class="status" id="buildSum"></p>
+        <div class="btnrow"><button type="button" class="btn" id="btnBuildCopy">Copy list</button><button type="button" class="btn" id="btnBuildCsv">Save as CSV</button><button type="button" class="btn" id="btnBuildSvg">Save drawing</button></div>
+      </div>
+      <div id="buildList" class="grp"></div>
+      <p class="note">Quantities are budgeting estimates from rules of thumb, with waste included. They are not an engineered or code-checked design: framing, foundations, plumbing and wiring must be designed and inspected to your local codes.</p>
+    </div>
+    <div class="pane-in" id="shopPane">
       <div class="grp">
         <h2>Shopping list</h2>
         <div class="sum">
@@ -314,11 +356,14 @@ input[type=file]{max-width:100%; font-size:13px}
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="js/catalog.js"></script>
+<script src="js/stores.js"></script>
 <script src="js/layout.js"></script>
 <script src="js/models.js"></script>
 <script src="js/scene.js"></script>
 <script src="js/editor.js"></script>
 <script src="js/recognize.js"></script>
+<script src="js/takeoff.js"></script>
+<script src="js/drawing.js"></script>
 <script src="js/app.js"></script>
 
 </body>

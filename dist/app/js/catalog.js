@@ -83,6 +83,15 @@ const ROOMS = {
 };
 const CATALOG = [], BYID = {};
 const idOf = (cat, style, tier, si) => cat + '-' + style + '-' + tier + '-' + si;
+/* Colours a piece is drawn in. `color` (a store product's own colour) replaces the upholstery or the wood, whichever the piece shows. */
+const SOFT = ['sofa', 'armchair', 'rug', 'bed', 'dchair', 'ochair'];
+function paletteOf(cat, style, tier, color) {
+  const S = STYLES[style], C = CATS[cat], soft = SOFT.includes(cat), o = { c1: cat === 'rug' ? S.rug[tier] : S.fabric[tier], c2: S.wood[tier], c3: S.metal };
+  if (C.area) o.c1 = parseInt(S.floor[tier].slice(1), 16);
+  if (color != null) { if (soft || C.area) o.c1 = color; else o.c2 = color; }
+  o.swatch = C.area ? o.c1 : (cat === 'toilet' || cat === 'tub' || cat === 'shower') ? CERAMIC : (cat === 'fridge' || cat === 'range') ? STEEL : soft ? o.c1 : (cat === 'plant' ? 0x4f7f4a : (cat === 'lamp' ? o.c3 : o.c2));
+  return o;
+}
 for (const cat in CATS) {
   const C = CATS[cat];
   for (const style in STYLES) {
@@ -90,11 +99,8 @@ for (const cat in CATS) {
     for (let tier = 0; tier < 3; tier++) {
       C.sizes.forEach((sz, si) => {
         const raw = C.base * sz[4] * TIERS[tier].mult * S.mult, price = C.area ? Math.round(raw) : Math.round(raw / 10) * 10 - 1;
-        const it = { id: idOf(cat, style, tier, si), cat, style, tier, si, w: sz[0], d: sz[1], h: sz[2],
-          name: C.name + ' “' + S.series[tier] + '”' + (sz[3] ? ', ' + sz[3] : ''), price, supplier: S.supplier,
-          c1: cat === 'rug' ? S.rug[tier] : S.fabric[tier], c2: S.wood[tier], c3: S.metal };
-        if (C.area) it.c1 = parseInt(S.floor[tier].slice(1), 16);
-        it.swatch = C.area ? it.c1 : (cat === 'toilet' || cat === 'tub' || cat === 'shower') ? CERAMIC : (cat === 'fridge' || cat === 'range') ? STEEL : (cat === 'sofa' || cat === 'armchair' || cat === 'rug' || cat === 'bed' || cat === 'dchair' || cat === 'ochair') ? it.c1 : (cat === 'plant' ? 0x4f7f4a : (cat === 'lamp' ? it.c3 : it.c2));
+        const it = Object.assign({ id: idOf(cat, style, tier, si), cat, style, tier, si, w: sz[0], d: sz[1], h: sz[2],
+          name: C.name + ' “' + S.series[tier] + '”' + (sz[3] ? ', ' + sz[3] : ''), price, supplier: S.supplier }, paletteOf(cat, style, tier));
         CATALOG.push(it); BYID[it.id] = it;
       });
     }

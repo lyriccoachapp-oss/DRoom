@@ -287,7 +287,7 @@ function planRoom(room,style,budget,notes){
   const qty=c=>CATS[c].unit?paintGallons(r):CATS[c].area?area:placed.filter(p=>p.cat===c).length;
   const si=c=>CATS[c].area||CATS[c].unit?0:placed.find(p=>p.cat===c).si;
   const tier={};active.forEach(c=>tier[c]=0);
-  const itemOf=c=>room.overrides[c]?BYID[room.overrides[c]]:BYID[idOf(c,style,tier[c],si(c))];
+  const itemOf=c=>Stores.styled(room.overrides[c]?BYID[room.overrides[c]]:Stores.pick(c,style,tier[c],si(c)),style);
   const total=()=>active.reduce((s,c)=>s+itemOf(c).price*qty(c),0);
   for(const c of active.slice().reverse()){
     if(total()<=budget)break;

@@ -287,7 +287,7 @@ function planRoom(room,style,budget,notes){
   const qty=c=>CATS[c].unit?paintGallons(r):CATS[c].area?area:placed.filter(p=>p.cat===c).length;
   const si=c=>CATS[c].area||CATS[c].unit?0:placed.find(p=>p.cat===c).si;
   const tier={};active.forEach(c=>tier[c]=0);
-  const itemOf=c=>room.overrides[c]?BYID[room.overrides[c]]:BYID[idOf(c,style,tier[c],si(c))];
+  const itemOf=c=>Stores.styled(room.overrides[c]?BYID[room.overrides[c]]:Stores.pick(c,style,tier[c],si(c)),style);
   const total=()=>active.reduce((s,c)=>s+itemOf(c).price*qty(c),0);
   for(const c of active.slice().reverse()){
     if(total()<=budget)break;
@@ -320,7 +320,10 @@ function walkArea(plans){
     const d=at(r,r.door.wall,r.door.t,0,Math.max(0.5,r.door.width-0.12),1.1);
     zones.push({x0:o.x+d.cx-d.hx,x1:o.x+d.cx+d.hx,z0:o.y+d.cz-d.hz,z1:o.y+d.cz+d.hz});
   });
-  const test=(x,z)=>zones.some(q=>x>=q.x0&&x<=q.x1&&z>=q.z0&&z<=q.z1);
+  /* Furniture is solid: you walk round it, with a little clearance. Rugs and wall cabinets do not block. */
+  const solid=[];
+  plans.forEach(pl=>(pl.placed||[]).forEach(q=>{if(!q.flat&&q.h>0.3)solid.push({x0:pl.room.x+q.cx-q.hx-0.12,x1:pl.room.x+q.cx+q.hx+0.12,z0:pl.room.y+q.cz-q.hz-0.12,z1:pl.room.y+q.cz+q.hz+0.12});}));
+  const test=(x,z)=>zones.some(q=>x>=q.x0&&x<=q.x1&&z>=q.z0&&z<=q.z1)&&!solid.some(q=>x>q.x0&&x<q.x1&&z>q.z0&&z<q.z1);
   test.zones=zones;
   return test;
 }
