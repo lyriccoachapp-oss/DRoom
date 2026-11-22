@@ -15,7 +15,12 @@ npm test
 ```
 
 ```bash
-npm run serve
+npm start
 ```
 
-`npm run serve` builds `dist/` and serves it at http://localhost:8080 (landing at `/`, planner at `/app/`). State of the project and the plan: `docs/ROADMAP.md`.
+`npm start` builds `dist/` and serves it at http://localhost:8080 (landing at `/`, planner at `/app/`) together with the photo render API. Copy `.env.example` to `.env` and set `OPENAI_API_KEY` to turn photo render on. Needs Node 22.9 or newer; no dependencies.
+
+- `server/index.js` — static files, `POST /api/render`, `GET /api/health`.
+- `server/render.js` — request checks, prompt, call to the image model.
+
+State of the project and the plan: `docs/ROADMAP.md`.

@@ -9,9 +9,15 @@
     return { id: newId(), name: ROOMS[type].name, type, x, y, W, D, doorWall: 'S', doorPos: 0.82, winWall: 'N', winPos: 0.5, overrides: {}, removed: [] };
   }
   function defaults() {
-    const a = makeRoom('living', 0, 0, 5.4, 4.2), b = makeRoom('bedroom', 5.4, 0, 4.0, 3.6), k = makeRoom('kitchen', 0, 4.2, 3.8, 3.2), t = makeRoom('bathroom', 5.4, 3.6, 2.4, 2.2);
-    b.doorPos = 0.2; k.doorWall = 'N'; k.winWall = 'S'; t.doorWall = 'W'; t.doorPos = 0.7; t.winWall = 'E';
-    return { style: 'scandi', budget: 20000, units: 'ft', rooms: [a, b, k, t], roomId: a.id, view: 'plan' };
+    /* Sample home: every room opens onto the hallway or the living room, so all of it can be walked. */
+    const a = makeRoom('living', 0, 0, 5.4, 4.2), h = makeRoom('hall', 5.4, 0, 1.4, 5.8), b = makeRoom('bedroom', 6.8, 0, 4.0, 3.6),
+      t = makeRoom('bathroom', 6.8, 3.6, 2.4, 2.2), k = makeRoom('kitchen', 0, 4.2, 3.8, 3.2);
+    a.doorWall = 'E'; a.doorPos = 0.7; a.winWall = 'N';
+    h.doorWall = 'S'; h.doorPos = 0.5; h.winWall = 'N';
+    b.doorWall = 'W'; b.doorPos = 0.5; b.winWall = 'N';
+    t.doorWall = 'W'; t.doorPos = 0.5; t.winWall = 'E';
+    k.doorWall = 'N'; k.doorPos = 0.82; k.winWall = 'S';
+    return { style: 'scandi', budget: 20000, units: 'ft', rooms: [a, h, b, t, k], roomId: a.id, view: 'plan' };
   }
   function load() {
     try {
@@ -41,7 +47,8 @@
     if (!room() && state.rooms.length) state.roomId = state.rooms[0].id;
     clash = new Set(); const names = [];
     state.rooms.forEach((a, i) => state.rooms.slice(i + 1).forEach(b => {
-      if (Math.min(a.x + a.W, b.x + b.W) - Math.max(a.x, b.x) > 0.05 && Math.min(a.y + a.D, b.y + b.D) - Math.max(a.y, b.y) > 0.05) { clash.add(a.id); clash.add(b.id); names.push(a.name + ' and ' + b.name); }
+      const hit = roomRects(a).some(p => roomRects(b).some(q => Math.min(p.x1, q.x1) - Math.max(p.x0, q.x0) > 0.05 && Math.min(p.z1, q.z1) - Math.max(p.z0, q.z0) > 0.05));
+      if (hit) { clash.add(a.id); clash.add(b.id); names.push(a.name + ' and ' + b.name); }
     }));
     clashText = names.length ? 'Rooms overlap: ' + names.join('; ') + '. Move or resize one of them.' : '';
   }
@@ -76,20 +83,47 @@
     if (r) {
       const nm = $('#inName'); if (document.activeElement !== nm) nm.value = r.name;
       $('#selType').value = r.type;
+      $('#selShape').value = cutOf(r) ? r.cut.corner : '';
+      const pb = $('#paints'); pb.textContent = '';
+      const cur = (r.wallColor || '').toUpperCase(), mk = (title, color) => {
+        const b = el('button', color ? '' : 'nopaint'); b.type = 'button'; b.title = title; b.setAttribute('aria-label', title);
+        if (color) b.style.background = color; b.setAttribute('aria-pressed', (color || '') === cur ? 'true' : 'false');
+        b.addEventListener('click', () => { if (color) r.wallColor = color; else delete r.wallColor; update(); }); pb.appendChild(b);
+      };
+      mk('Keep the style colour, no paint', null); PAINTS.forEach(p => mk(p[0], p[1]));
+      const lab = el('label'); lab.title = 'Pick any colour'; const ci = el('input'); ci.type = 'color'; ci.setAttribute('aria-label', 'Pick any wall colour');
+      ci.value = /^#[0-9A-F]{6}$/.test(cur) ? cur.toLowerCase() : '#d4cbbe';
+      ci.addEventListener('change', e => { r.wallColor = e.target.value.toUpperCase(); update(); });
+      if (cur && !PAINTS.some(p => p[1] === cur)) lab.style.boxShadow = '0 0 0 2px var(--panel), 0 0 0 4px var(--accent)';
+      lab.appendChild(ci); pb.appendChild(lab);
+      const dd = doorOf(r), ws = $('#selDoorW');
+      $('#selDoor').value = dd.type;
+      Array.from(ws.options).forEach(op => { const v = parseFloat(op.value); op.textContent = UNITS.v === 'm' ? Math.round(v * 100) + ' cm' : Math.round(v / 0.0254) + ' in'; });
+      ws.value = Array.from(ws.options).map(op => op.value).sort((a, b) => Math.abs(a - dd.width) - Math.abs(b - dd.width))[0];
+      $('#btnDoorSide').hidden = dd.type === 'open';
+      $('#btnDoorSide').textContent = dd.type === 'swing' ? 'Flip hinge side' : 'Slide the other way';
+      $('#btnDoorSwing').hidden = dd.type !== 'swing';
+      $('#btnDoorSwing').textContent = dd.swing === 'in' ? 'Open outward' : 'Open inward';
       $('#inW').value = r.W; $('#inD').value = r.D; $('#outW').textContent = fmtLen(r.W); $('#outD').textContent = fmtLen(r.D);
     }
-    const area = state.rooms.reduce((s, x) => s + x.W * x.D, 0);
+    const area = state.rooms.reduce((s, x) => s + roomArea(x), 0);
     $('#homeDims').textContent = state.rooms.length + (state.rooms.length === 1 ? ' room · ' : ' rooms · ') + fmtArea(area);
     $('#hint').textContent = state.view === 'plan' ? 'Drag rooms, corners and markers to edit the plan'
-      : state.view === 'walk' ? 'Drag to look around · W A S D or arrows to walk'
-      : 'Drag to rotate · scroll to zoom · tap furniture to swap it';
-    $('#walkpad').hidden = state.view !== 'walk';
+      : state.view === 'walk' ? 'Click floor to walk · double-click furniture · drag to look · wheel to step'
+      : 'Drag to rotate · scroll to zoom · double-click furniture to swap it';
+    $('#btnRender').hidden = state.view === 'plan' || !has3d || !plans.length;
+    if (state.view === 'plan') $('#renderPane').hidden = true;
+    $('#walkpad').hidden = state.view !== 'walk' || !has3d;
+    $('#mini').toggleAttribute('hidden', state.view !== 'walk' || !has3d);
+    const wr = $('#walkRooms'); wr.hidden = state.view !== 'walk' || !has3d || state.rooms.length < 2; wr.textContent = '';
+    if (!wr.hidden) state.rooms.forEach(r => { const b = el('button', '', r.name); b.type = 'button'; b.dataset.id = r.id; b.setAttribute('aria-pressed', r.id === state.roomId ? 'true' : 'false'); b.addEventListener('click', () => { state.roomId = r.id; Scene3D.goRoom(r.id); renderSide(); }); wr.appendChild(b); });
     $('#plan').style.display = state.view === 'plan' ? '' : 'none';
     $('#cv').hidden = state.view === 'plan' || !has3d;
     $('#fail').hidden = state.view === 'plan' || has3d;
   }
   const REASON = { budget: 'over budget', space: 'does not fit', removed: 'removed by you' };
   function renderList() {
+    renderCard();
     const total = plans.reduce((s, p) => s + p.total, 0), over = total > state.budget;
     $('#sumTotal').textContent = money(total); $('#sumOf').textContent = 'of ' + money(state.budget);
     $('#bar').classList.toggle('over', over); $('#barFill').style.width = clamp(total / state.budget * 100, 0, 100) + '%';
@@ -106,8 +140,8 @@
       p.lines.forEach(l => {
         const it = l.item, on = sel && sel.roomId === r.id && sel.cat === l.cat, li = el('li', 'item' + (on ? ' sel' : ''));
         const hd = el('button', 'item-head'); hd.type = 'button'; hd.setAttribute('aria-expanded', on ? 'true' : 'false');
-        const sw = el('span', 'sw'); sw.style.background = hex(it.swatch);
-        const mid = el('span'); mid.append(el('div', 'nm', it.name + (l.area ? ', ' + fmtArea(l.qty) : l.qty > 1 ? ' × ' + l.qty : '')), el('div', 'meta num', fmtDims(it)));
+        const sw = el('span', 'sw'); sw.style.background = l.unit && r.wallColor ? r.wallColor : hex(it.swatch);
+        const mid = el('span'); mid.append(el('div', 'nm', it.name + (l.unit ? ', ' + l.qty + ' ' + l.unit : l.area ? ', ' + fmtArea(l.qty) : l.qty > 1 ? ' × ' + l.qty : '')), el('div', 'meta num', fmtDims(it)));
         const pr = el('span', 'pr num', money(it.price * l.qty)); pr.appendChild(el('small', '', STYLES[it.style].name + ' · ' + TIERS[it.tier].name));
         hd.append(sw, mid, pr); hd.addEventListener('click', () => select(on ? null : { roomId: r.id, cat: l.cat })); li.appendChild(hd);
         if (on) li.appendChild(altsFor(p, l));
@@ -152,11 +186,29 @@
     body.appendChild(alts);
     return body;
   }
-  function select(s, scroll) {
+  /* A pick in the 3D view opens a card over the view, so nobody has to scroll away from the walk to swap a piece. */
+  let cardOpen = false;
+  function select(s, from3d) {
     sel = s; if (s) state.roomId = s.roomId;
+    cardOpen = !!(s && from3d && state.view !== 'plan');
     renderSide(); renderList(); PlanEditor.render(); Scene3D.setSelected(sel);
-    if (scroll && s) { const n = document.querySelector('.item.sel'); if (n && n.scrollIntoView) n.scrollIntoView({ block: 'nearest' }); }
   }
+  function renderCard() {
+    const card = $('#itemCard'), p = sel && planOf(sel.roomId), l = p && p.lines.find(x => x.cat === sel.cat);
+    card.hidden = !(cardOpen && l && state.view !== 'plan');
+    if (card.hidden) return;
+    const it = l.item;
+    $('#icName').textContent = it.name + (l.unit ? ', ' + l.qty + ' ' + l.unit : l.area ? ', ' + fmtArea(l.qty) : l.qty > 1 ? ' \u00d7 ' + l.qty : '');
+    $('#icMeta').textContent = p.room.name + ' \u00b7 ' + fmtDims(it);
+    $('#icPrice').textContent = money(it.price * l.qty);
+    $('#icClose').textContent = state.view === 'walk' ? 'Back to walking' : 'Close';
+    const body = $('#icBody'); body.textContent = ''; body.appendChild(altsFor(p, l));
+    /* The card lists only what fits this room; the full list with sizes that do not fit stays in the shopping list. */
+    body.querySelectorAll('.alt:disabled').forEach(n => n.remove());
+  }
+  function closeCard() { cardOpen = false; select(null); }
+  $('#icClose').addEventListener('click', closeCard);
+  window.addEventListener('keydown', e => { if (e.key === 'Escape' && cardOpen) closeCard(); });
   function syncScene() {
     if (state.view === 'plan') { sceneStale = true; return; }
     Scene3D.build(plans, state.style); Scene3D.setSelected(sel); sceneStale = false;
@@ -173,12 +225,28 @@
   $('#selType').addEventListener('change', e => { const v = e.target.value, r = room(); if (!r || r.type === v) return; if (r.name === ROOMS[r.type].name) r.name = ROOMS[v].name; r.type = v; r.overrides = {}; r.removed = []; sel = null; update(); });
   seg('#segView', v => {
     const fromPlan = state.view === 'plan';
-    state.view = v; save(); renderSide();
+    if (state.view === 'walk' && has3d) state.walk = Scene3D.pose();
+    state.view = v; if (v === 'plan') cardOpen = false; save(); renderSide(); renderList();
     if (v !== 'plan' && fromPlan) Scene3D.regrow();
-    if (v !== 'plan') { if (sceneStale) syncScene(); Scene3D.setView(v, planOf(state.roomId) || plans[0]); Scene3D.resize(); }
+    if (v !== 'plan') { if (sceneStale) syncScene(); Scene3D.setView(v, planOf(state.roomId) || plans[0], v === 'walk' ? state.walk : null); Scene3D.resize(); }
   });
+  /* The walk position is kept with the project, so the Walk tab (or a reload) returns to the same spot and view. */
+  const keepPose = () => { if (state.view === 'walk' && has3d) { state.walk = Scene3D.pose(); save(); } };
+  window.addEventListener('pagehide', keepPose);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) keepPose(); });
   $('#inBudget').addEventListener('input', e => { state.budget = parseInt(e.target.value, 10); update(); });
   $('#inName').addEventListener('input', e => { const r = room(); if (r) { r.name = e.target.value.trim() || ROOMS[r.type].name; update(); } });
+  $('#selDoor').addEventListener('change', e => { const r = room(); if (r) { r.doorType = e.target.value; update(); } });
+  $('#selDoorW').addEventListener('change', e => { const r = room(); if (r) { r.doorWidth = parseFloat(e.target.value); update(); } });
+  $('#btnDoorSide').addEventListener('click', () => { const r = room(); if (r) { r.doorSide = doorOf(r).side === 'left' ? 'right' : 'left'; update(); } });
+  $('#btnDoorSwing').addEventListener('click', () => { const r = room(); if (r) { r.doorSwing = doorOf(r).swing === 'in' ? 'out' : 'in'; update(); } });
+  $('#selShape').addEventListener('change', e => {
+    const r = room(); if (!r) return; const v = e.target.value;
+    if (!v) delete r.cut;
+    else if (r.W < 2.8 || r.D < 2.8) { e.target.value = ''; toast = 'A room needs to be at least 9\u2032 \u00d7 9\u2032 (2.8 m) on both sides to take an L shape.'; update(); return; }
+    else r.cut = { corner: v, w: r.cut ? r.cut.w : Math.round(r.W * 4) / 10, d: r.cut ? r.cut.d : Math.round(r.D * 4) / 10 };
+    r.overrides = {}; update();
+  });
   $('#inW').addEventListener('input', e => { const r = room(); if (r) { r.W = parseFloat(e.target.value); update(); } });
   $('#inD').addEventListener('input', e => { const r = room(); if (r) { r.D = parseFloat(e.target.value); update(); } });
   function addRoom(type) {
@@ -195,16 +263,17 @@
     const lines = ['DRoom shopping list, ' + STYLES[state.style].name + ' style'];
     plans.forEach(p => {
       lines.push('', p.room.name + ' (' + fmtLen(p.room.W) + ' × ' + fmtLen(p.room.D) + ')');
-      p.lines.forEach(l => lines.push('- ' + l.item.name + (l.area ? ', ' + fmtArea(l.qty) : l.qty > 1 ? ' × ' + l.qty : '') + ', ' + fmtDims(l.item) + ', ' + money(l.item.price * l.qty)));
+      p.lines.forEach(l => lines.push('- ' + l.item.name + (l.unit ? ', ' + l.qty + ' ' + l.unit : l.area ? ', ' + fmtArea(l.qty) : l.qty > 1 ? ' × ' + l.qty : '') + ', ' + fmtDims(l.item) + ', ' + money(l.item.price * l.qty)));
     });
     lines.push('', 'Total: ' + money(plans.reduce((s, p) => s + p.total, 0)) + ' (budget ' + money(state.budget) + ')');
     const b = $('#btnCopy'), done = ok => { b.textContent = ok ? 'Copied' : 'Copy failed'; setTimeout(() => b.textContent = 'Copy list', 1600); };
     try { navigator.clipboard.writeText(lines.join('\n')).then(() => done(true), () => done(false)); } catch (e) { done(false); }
   });
-  [['#padF', 'padF'], ['#padB', 'padB']].forEach(a => {
-    const b = $(a[0]);
-    b.addEventListener('pointerdown', e => { e.preventDefault(); Scene3D.hold(a[1], true); });
-    ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, () => Scene3D.hold(a[1], false)));
+  [['#padF', 'padF'], ['#padB', 'padB'], ['#padL', 'padL'], ['#padR', 'padR']].forEach(a => {
+    const b = $(a[0]), off = () => { Scene3D.hold(a[1], false); b.classList.remove('on'); };
+    b.addEventListener('pointerdown', e => { e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch (err) {} Scene3D.hold(a[1], true); b.classList.add('on'); });
+    ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => b.addEventListener(ev, off));
+    b.addEventListener('contextmenu', e => e.preventDefault());
   });
 
   /* ---------- boot ---------- */
@@ -224,9 +293,9 @@
     $('#inTraceW').value = trace.width; $('#outTraceW').textContent = fmtLen(trace.width);
     $('#inTraceO').value = trace.opacity; $('#outTraceO').textContent = Math.round(trace.opacity * 100) + '%';
   }
-  function useImage(src, file) {
+  function useImage(src, file, width, note) {
     const img = new Image();
-    img.onload = () => { trace = { src, aspect: img.width / img.height || 1, width: 12, opacity: 0.5, img, file }; say('Plan loaded. Press Detect rooms, then check the scale.'); PlanEditor.refit(); traceUi(); PlanEditor.render(); };
+    img.onload = () => { trace = { src, aspect: img.width / img.height || 1, width: width || 12, opacity: 0.5, img, file }; say(note || 'Plan loaded. Press Detect rooms, then check the scale.'); PlanEditor.refit(); traceUi(); PlanEditor.render(); };
     img.onerror = () => say('This file could not be opened as a picture.');
     img.src = src;
   }
@@ -250,8 +319,14 @@
       const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
       await page.render({ canvasContext: g, viewport: vp }).promise;
       const blob = await new Promise(r => c.toBlob(r, 'image/png'));
-      useImage(c.toDataURL('image/png'), blob);
-      if (doc.numPages > 1) setTimeout(() => say('Plan loaded from page 1 of ' + doc.numPages + '. Press Detect rooms, then check the scale.'), 50);
+      /* A scale printed on the sheet gives the real size of the page: page width on paper times the ratio. */
+      let width = null, note = 'Plan loaded' + (doc.numPages > 1 ? ' from page 1 of ' + doc.numPages : '') + '. Press Detect rooms, then check the scale.';
+      try {
+        const tc = await page.getTextContent(), sc = PlanRecognizer.scaleFromText(tc.items.map(i => i.str).join(' '));
+        const wm = sc ? base.width / 72 * 0.0254 * sc.ratio : 0;
+        if (wm >= 3 && wm <= 200) { width = wm; note = 'Plan loaded. Scale ' + sc.raw + ' was read from the sheet, so sizes should already be right. Press Detect rooms.'; }
+      } catch (e) {}
+      useImage(c.toDataURL('image/png'), blob, width, note);
     } catch (e) { say('This PDF could not be opened. Save the plan page as a picture and load that.'); }
   }
   $('#inTrace').addEventListener('change', e => {
@@ -279,6 +354,13 @@
     rooms.forEach(r => {
       const dx = cx - (r.x + r.W / 2), dy = cy - (r.y + r.D / 2);
       r.doorWall = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'E' : 'W') : (dy > 0 ? 'S' : 'N'); r.winWall = OPP[r.doorWall]; r.doorPos = 0.5; r.winPos = 0.5;
+      const b = list[rooms.indexOf(r)];
+      if (b.cut && b.cut.w > 0 && b.cut.h > 0 && r.W >= 2.8 && r.D >= 2.8) r.cut = { corner: b.cut.corner, w: Math.round(b.cut.w * r.W * 10) / 10, d: Math.round(b.cut.h * r.D * 10) / 10 };
+      if (b.door) { r.doorWall = b.door.wall; r.doorPos = b.door.pos; r.winWall = OPP[r.doorWall]; }
+      if (b.ext) {                                   /* window on the longest outside wall that is not the door wall */
+        const cand = ['N', 'S', 'W', 'E'].filter(wl => b.ext[wl] && wl !== r.doorWall).sort((p, q) => (q === 'N' || q === 'S' ? r.W : r.D) - (p === 'N' || p === 'S' ? r.W : r.D));
+        if (cand.length) r.winWall = cand[0];
+      }
       seen[r.name] = (seen[r.name] || 0) + 1; if (seen[r.name] > 1) r.name = (r.name + ' ' + seen[r.name]).slice(0, 24);
     });
     return rooms;
@@ -331,7 +413,39 @@
   $('#btnCalOk').addEventListener('click', applyCal);
   $('#inCal').addEventListener('keydown', e => { if (e.key === 'Enter') applyCal(); });
   $('#btnTraceOff').addEventListener('click', () => { say(''); $('#calRow').hidden = true; PlanEditor.endCalibrate(); trace = null; $('#inTrace').value = ''; PlanEditor.refit(); traceUi(); PlanEditor.render(); });
-  has3d = Scene3D.init($('#cv'), $('#stage'), s => select(s, true));
+  has3d = Scene3D.init($('#cv'), $('#stage'), s => select(s, true), $('#mini'));
+  /* ---------- photo render ---------- */
+  /* Sends a snapshot of the current view to the DRoom server, which asks the image model for a photorealistic version.
+     The page only names the style, rooms and item types; the server writes the prompt. */
+  const RENDER_URL = window.DROOM_RENDER_URL || '/api/render';
+  let renderBusy = false, renderSrc = null, renderOut = null;
+  async function photoRender() {
+    if (renderBusy) return;
+    const snap = Scene3D.snapshot(); if (!snap) return;
+    const inView = snap.view === 'walk' ? plans.filter(p => p.room.id === snap.roomId) : plans;
+    const rooms = (inView.length ? inView : plans.slice(0, 1)).map(p => ({ type: p.room.type, wall: p.room.wallColor || null, items: p.lines.filter(l => !l.area && !l.unit).map(l => CATS[l.cat].name.split(' with ')[0]) }));
+    const pane = $('#renderPane'), img = $('#rpImg'), msg = $('#rpMsg'), cmp = $('#rpCompare');
+    renderBusy = true; renderSrc = snap.image; renderOut = null;
+    pane.hidden = false; img.src = snap.image; img.style.opacity = '0.45'; cmp.hidden = true;
+    msg.textContent = 'Rendering this view. It takes about half a minute\u2026';
+    try {
+      const res = await fetch(RENDER_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: snap.image, shape: snap.shape, view: snap.view, style: state.style, rooms }) });
+      let data = null; try { data = await res.json(); } catch (e) {}
+      if (!res.ok || !data || !data.image) { msg.textContent = (data && data.message) || 'Photo render is not available here yet.'; return; }
+      renderOut = data.image; img.src = renderOut; msg.textContent = ''; cmp.hidden = false;
+    } catch (e) {
+      msg.textContent = 'Photo render needs the DRoom server, and this page is running without it.';
+    } finally { renderBusy = false; img.style.opacity = '1'; }
+  }
+  $('#btnRender').addEventListener('click', photoRender);
+  $('#rpClose').addEventListener('click', () => { $('#renderPane').hidden = true; });
+  (function () {
+    const cmp = $('#rpCompare'), show = orig => { if (renderOut) $('#rpImg').src = orig ? renderSrc : renderOut; };
+    cmp.addEventListener('pointerdown', e => { e.preventDefault(); try { cmp.setPointerCapture(e.pointerId); } catch (err) {} show(true); });
+    ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => cmp.addEventListener(ev, () => show(false)));
+  })();
+  /* While walking, the room chips show the room you are standing in. */
+  $('#cv').addEventListener('roomchange', e => { document.querySelectorAll('#walkRooms button').forEach(b => b.setAttribute('aria-pressed', b.dataset.id === e.detail ? 'true' : 'false')); });
   update(true); hist.push(snapshot()); hi = 0; histButtons();
-  if (state.view !== 'plan') { Scene3D.setView(state.view, planOf(state.roomId) || plans[0]); Scene3D.resize(); }
+  if (state.view !== 'plan') { Scene3D.setView(state.view, planOf(state.roomId) || plans[0], state.walk); Scene3D.resize(); }
 })();

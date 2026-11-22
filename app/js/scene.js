@@ -363,6 +363,20 @@ const Scene3D = (function () {
     if (!h || !h.cat) onPick(null);
   }
   function hold(key, on) { keys[key] = on; }
+  /* A clean picture of the current view for the photo render: no rings or selection boxes, cropped to the nearest
+     of 3:2, 2:3 or 1:1 and scaled to the size the image model takes. Returns {image, shape} or null. */
+  function snapshot() {
+    if (!T || !plans.length) return null;
+    const hidden = [hover, dest, T.box, hotBox].filter(o => o && o.visible); hidden.forEach(o => { o.visible = false; });
+    placeCamera(); T.renderer.render(T.scene, T.camera);
+    const cw = canvas.width, ch = canvas.height, a = cw / ch;
+    const shape = a > 1.2 ? 'landscape' : a < 0.84 ? 'portrait' : 'square', out = { landscape: [1536, 1024], portrait: [1024, 1536], square: [1024, 1024] }[shape];
+    const ta = out[0] / out[1], sw = a > ta ? ch * ta : cw, sh = a > ta ? ch : cw / ta;
+    const c = document.createElement('canvas'); c.width = out[0]; c.height = out[1];
+    c.getContext('2d').drawImage(canvas, (cw - sw) / 2, (ch - sh) / 2, sw, sh, 0, 0, out[0], out[1]);
+    hidden.forEach(o => { o.visible = true; }); T.dirty = true;
+    return { image: c.toDataURL('image/jpeg', 0.92), shape, view: view === 'walk' ? 'walk' : 'orbit', roomId: cam.roomId };
+  }
   function regrow() { wallMemo = {}; walls.forEach(wl => { wl.cur = 0.02; wl.g.scale.y = 0.02; }); if (T) T.growing = true; }
-  return { init, build, setView, setSelected, resize, hold, regrow, goRoom, walkTo, pose, refresh: function () { if (T) T.dirty = true; } };
+  return { init, build, setView, setSelected, resize, hold, regrow, goRoom, walkTo, pose, snapshot, refresh: function () { if (T) T.dirty = true; } };
 })();

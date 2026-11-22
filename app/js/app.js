@@ -111,6 +111,8 @@
     $('#hint').textContent = state.view === 'plan' ? 'Drag rooms, corners and markers to edit the plan'
       : state.view === 'walk' ? 'Click floor to walk · double-click furniture · drag to look · wheel to step'
       : 'Drag to rotate · scroll to zoom · double-click furniture to swap it';
+    $('#btnRender').hidden = state.view === 'plan' || !has3d || !plans.length;
+    if (state.view === 'plan') $('#renderPane').hidden = true;
     $('#walkpad').hidden = state.view !== 'walk' || !has3d;
     $('#mini').toggleAttribute('hidden', state.view !== 'walk' || !has3d);
     const wr = $('#walkRooms'); wr.hidden = state.view !== 'walk' || !has3d || state.rooms.length < 2; wr.textContent = '';
@@ -412,6 +414,36 @@
   $('#inCal').addEventListener('keydown', e => { if (e.key === 'Enter') applyCal(); });
   $('#btnTraceOff').addEventListener('click', () => { say(''); $('#calRow').hidden = true; PlanEditor.endCalibrate(); trace = null; $('#inTrace').value = ''; PlanEditor.refit(); traceUi(); PlanEditor.render(); });
   has3d = Scene3D.init($('#cv'), $('#stage'), s => select(s, true), $('#mini'));
+  /* ---------- photo render ---------- */
+  /* Sends a snapshot of the current view to the DRoom server, which asks the image model for a photorealistic version.
+     The page only names the style, rooms and item types; the server writes the prompt. */
+  const RENDER_URL = window.DROOM_RENDER_URL || '/api/render';
+  let renderBusy = false, renderSrc = null, renderOut = null;
+  async function photoRender() {
+    if (renderBusy) return;
+    const snap = Scene3D.snapshot(); if (!snap) return;
+    const inView = snap.view === 'walk' ? plans.filter(p => p.room.id === snap.roomId) : plans;
+    const rooms = (inView.length ? inView : plans.slice(0, 1)).map(p => ({ type: p.room.type, wall: p.room.wallColor || null, items: p.lines.filter(l => !l.area && !l.unit).map(l => CATS[l.cat].name.split(' with ')[0]) }));
+    const pane = $('#renderPane'), img = $('#rpImg'), msg = $('#rpMsg'), cmp = $('#rpCompare');
+    renderBusy = true; renderSrc = snap.image; renderOut = null;
+    pane.hidden = false; img.src = snap.image; img.style.opacity = '0.45'; cmp.hidden = true;
+    msg.textContent = 'Rendering this view. It takes about half a minute\u2026';
+    try {
+      const res = await fetch(RENDER_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: snap.image, shape: snap.shape, view: snap.view, style: state.style, rooms }) });
+      let data = null; try { data = await res.json(); } catch (e) {}
+      if (!res.ok || !data || !data.image) { msg.textContent = (data && data.message) || 'Photo render is not available here yet.'; return; }
+      renderOut = data.image; img.src = renderOut; msg.textContent = ''; cmp.hidden = false;
+    } catch (e) {
+      msg.textContent = 'Photo render needs the DRoom server, and this page is running without it.';
+    } finally { renderBusy = false; img.style.opacity = '1'; }
+  }
+  $('#btnRender').addEventListener('click', photoRender);
+  $('#rpClose').addEventListener('click', () => { $('#renderPane').hidden = true; });
+  (function () {
+    const cmp = $('#rpCompare'), show = orig => { if (renderOut) $('#rpImg').src = orig ? renderSrc : renderOut; };
+    cmp.addEventListener('pointerdown', e => { e.preventDefault(); try { cmp.setPointerCapture(e.pointerId); } catch (err) {} show(true); });
+    ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => cmp.addEventListener(ev, () => show(false)));
+  })();
   /* While walking, the room chips show the room you are standing in. */
   $('#cv').addEventListener('roomchange', e => { document.querySelectorAll('#walkRooms button').forEach(b => b.setAttribute('aria-pressed', b.dataset.id === e.detail ? 'true' : 'false')); });
   update(true); hist.push(snapshot()); hi = 0; histButtons();
