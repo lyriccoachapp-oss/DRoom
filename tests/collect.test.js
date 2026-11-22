@@ -69,3 +69,34 @@ test('a search hit and its detail answer become a feed row the planner imports',
   assert.strictEqual(vm.runInContext('boxesFor(__line)', ctx), Math.ceil(22 / it.cover));
   assert.match(vm.runInContext('fmtDims(__line.item)', ctx), /^7\.1 × 48 in · \$2\.3\d \/ ft²$/);
 });
+
+test('an IKEA product page becomes a feed row, and product addresses are sorted into groups', () => {
+  const { rowFromHtml, kindOfUrl, KINDS } = require('../tools/collect-ikea');
+  const ld = o => '<script type="application/ld+json">' + JSON.stringify(o) + '</script>';
+  const product = { '@type': 'Product', name: 'EXAMPEL Sofa - Testby grey', sku: '123.456.78', category: 'Fabric sofas', width: '218 cm (85 7/8 ")', depth: '88 cm (34 5/8 ")', height: '85 cm (33 1/2 ")',
+    image: [{ '@type': 'ImageObject', contentUrl: 'https://example.com/a.jpg' }], offers: { '@type': 'Offer', price: '699', priceCurrency: 'CAD', url: 'https://example.com/p/exampel-s12345678/' } };
+  const html = '<html>' + ld({ '@type': 'BreadcrumbList' }) + ld(product) + ld({ '@type': '3DModel', encoding: [{ contentUrl: 'https://example.com/m.glb' }] }) + '<script type="application/ld+json">{broken</script></html>';
+  const row = rowFromHtml(html, 'sofa');
+  assert.deepStrictEqual({ s: row.sku, p: row.price, w: row.width_cm, d: row.depth_cm, h: row.height_cm, c: row.color, i: row.image, m: row.model_glb, k: row.droom_category },
+    { s: '123.456.78', p: 699, w: 218, d: 88, h: 85, c: 'Testby grey', i: 'https://example.com/a.jpg', m: 'https://example.com/m.glb', k: 'sofa' });
+  assert.strictEqual(rowFromHtml(ld(Object.assign({}, product, { width: undefined })), 'sofa'), null, 'no size, no row');
+  assert.strictEqual(rowFromHtml(ld(Object.assign({}, product, { category: 'Outdoor lounge furniture' })), 'sofa'), null);
+  assert.strictEqual(rowFromHtml('<html></html>', 'sofa'), null);
+
+  const all = Object.keys(KINDS), k = slug => kindOfUrl('https://www.ikea.com/ca/en/p/' + slug + '/', all);
+  assert.strictEqual(k('exampel-sofa-testby-grey-s12345678'), 'sofa');
+  assert.strictEqual(k('exampel-sofa-cover-testby-grey-12345678'), null);
+  assert.strictEqual(k('exampel-swivel-chair-black-s12345678'), 'ochair');
+  assert.strictEqual(k('exampel-chair-white-12345678'), 'dchair');
+  assert.strictEqual(k('exampel-armchair-white-12345678'), 'armchair');
+  assert.strictEqual(k('exampel-bunk-bed-frame-white-12345678'), null);
+  assert.strictEqual(k('exampel-sofa-outdoor-grey-12345678'), null);
+  assert.strictEqual(kindOfUrl('https://www.ikea.com/ca/en/p/exampel-sofa-grey-1/', ['bed']), null);
+
+  const ctx = vm.createContext({ document: { querySelector() { return null; } }, console });
+  for (const f of ['catalog.js', 'stores.js', 'layout.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'app', 'js', f), 'utf8'), ctx, { filename: f });
+  ctx.__feed = JSON.stringify({ products: [row] });
+  assert.strictEqual(vm.runInContext('Stores.importFeed("ikea", __feed)', ctx).added, 1);
+  const it = vm.runInContext('BYID["s:ikea:123.456.78"]', ctx);
+  assert.ok(it.cat === 'sofa' && it.si === 2 && Math.abs(it.w - 2.18) < 1e-9 && Math.abs(it.h - 0.85) < 1e-9);
+});
