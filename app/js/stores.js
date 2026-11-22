@@ -78,7 +78,7 @@ const Stores = (function () {
     [/office chair|desk chair|swivel chair|task chair/, 'ochair'], [/kitchen island/, 'island'], [/\bdesks?\b/, 'desk'],
     [/arm ?chair|accent chair|recliner|lounge chair/, 'armchair'], [/sofa|couch|love ?seat|sectional/, 'sofa'],
     [/\brugs?\b/, 'rug'], [/floor lamp/, 'lamp'], [/book ?(case|shel)|shelving unit|shelf unit/, 'shelf'],
-    [/wardrobe|armoire/, 'wardrobe'], [/dresser|chest of drawers/, 'dresser'], [/sideboard|buffet/, 'sideboard'],
+    [/wardrobe|armoire/, 'wardrobe'], [/dresser|chests? of drawers/, 'dresser'], [/sideboard|buffet/, 'sideboard'],
     [/linen (cabinet|tower)/, 'bathcab'], [/vanit(y|ies)/, 'vanity'], [/\btoilets?\b/, 'toilet'], [/bath ?tub|\btubs?\b/, 'tub'],
     [/shower (enclosure|kit|stall|cabin)|\bshowers\b/, 'shower'], [/\b(range|stove)s?\b/, 'range'], [/refrigerator|fridge/, 'fridge'],
     [/\bbeds?\b|bed frame/, 'bed'], [/(artificial|potted) plant|\bplants\b/, 'plant'],

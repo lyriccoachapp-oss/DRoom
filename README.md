@@ -55,3 +55,17 @@ SERPAPI_KEY=... node tools/collect-homedepot.js --kinds tile,floor --pages 2 --i
 The result, `catalog/homedepot.json`, is imported in the planner under Stores, The Home Depot. Floor tile and flooring are
 used now (piece size, price per sq ft, boxes to buy, tile drawn at its real size); wall tile and wallpaper are collected
 but wait until walls take finishes. `catalog/` is not committed.
+
+## Collecting IKEA furniture
+
+IKEA has no product API, so `tools/collect-ikea.js` reads its public product pages: addresses from the product sitemaps,
+facts from the structured data each page publishes (article number, name, price, width, depth, height, photos, and a link
+to a 3D model where one exists). It follows robots.txt (no search pages), reads one page every 1.5 s, caches under
+`catalog/.cache-ikea`, and stops on a 403 or 429.
+
+```bash
+node tools/collect-ikea.js --kinds sofa,bed,wardrobe --limit 40 --images catalog/img
+```
+
+Import `catalog/ikea.json` in the planner under Stores, IKEA. Products larger than the sizes the planner lays out are
+left out on import until the layout takes real product dimensions.
