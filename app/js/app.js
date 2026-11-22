@@ -113,6 +113,8 @@
       : state.view === 'walk' ? 'Click floor to walk · double-click furniture · drag to look · wheel to step'
       : 'Drag to rotate · scroll to zoom · double-click furniture to swap it';
     $('#btnRender').hidden = !is3d() || !has3d || !plans.length;
+    $('#btnSizes').hidden = !is3d() || !has3d || !plans.length; $('#btnSizes').setAttribute('aria-pressed', state.sizes === false ? 'false' : 'true');
+    $('#dimLabels').hidden = !is3d();
     if (!is3d()) $('#renderPane').hidden = true;
     $('#walkpad').hidden = state.view !== 'walk' || !has3d;
     $('#mini').toggleAttribute('hidden', state.view !== 'walk' || !has3d);
@@ -452,7 +454,9 @@
   $('#btnCalOk').addEventListener('click', applyCal);
   $('#inCal').addEventListener('keydown', e => { if (e.key === 'Enter') applyCal(); });
   $('#btnTraceOff').addEventListener('click', () => { say(''); $('#calRow').hidden = true; PlanEditor.endCalibrate(); trace = null; $('#inTrace').value = ''; PlanEditor.refit(); traceUi(); PlanEditor.render(); });
-  has3d = Scene3D.init($('#cv'), $('#stage'), s => select(s, true), $('#mini'));
+  has3d = Scene3D.init($('#cv'), $('#stage'), s => select(s, true), $('#mini'), $('#dimLabels'));
+  Scene3D.setSizes(state.sizes !== false);
+  $('#btnSizes').addEventListener('click', () => { state.sizes = state.sizes === false; save(); Scene3D.setSizes(state.sizes); renderSide(); });
   /* ---------- photo render ---------- */
   /* Sends a snapshot of the current view to the DRoom server, which asks the image model for a photorealistic version.
      The page only names the style, rooms and item types; the server writes the prompt. */
