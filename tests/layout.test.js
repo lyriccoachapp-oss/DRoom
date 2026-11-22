@@ -188,3 +188,61 @@ test('a wall colour adds paint by the gallon to the room', () => {
   const tight = run('planRoom(__room, "scandi", 200)');
   assert.ok(tight.lines.some(l => l.cat === 'paint'), 'paint stays when the budget is short');
 });
+
+test('construction takeoff: shared walls count once and quantities follow the stated rules', () => {
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'app', 'js', 'takeoff.js'), 'utf8'), ctx, { filename: 'takeoff.js' });
+  /* Two 4 x 4 m rooms side by side: outside perimeter 24 m, one shared 4 m wall. */
+  ctx.__pl = run(`[
+    {id:'a',name:'Kitchen',type:'kitchen',x:0,y:0,W:4,D:4,doorWall:'E',doorPos:0.5,winWall:'N',winPos:0.5,overrides:{},removed:[]},
+    {id:'b',name:'Bath',type:'bathroom',x:4,y:0,W:4,D:4,doorWall:'S',doorPos:0.5,winWall:'N',winPos:0.5,overrides:{},removed:[]}
+  ].map(room => planRoom(room, 'scandi', 30000))`);
+  const t = run('__t = takeoff(__pl, {height: 8, spacing: 16, foundation: "frost", slab: 4})');
+  assert.ok(Math.abs(t.ext - 24) < 1e-6 && Math.abs(t.int - 4) < 1e-6, `walls ${t.ext} / ${t.int}`);
+  assert.strictEqual(Array.from(t.runs).filter(r => !r.ext).length, 1);
+  const find = (g, re) => { const grp = Array.from(t.groups).find(x => x.title === g); return Array.from(grp.lines).find(l => re.test(l.name)); };
+  /* 6 outside runs: 4 of 4 m (11 spaces each) and 2 of 8 m... measured: studs = sum(ceil(L/0.4064)+1+4) + 2 windows x 4, +10% */
+  const sp = 16 * 0.0254, runsExt = Array.from(t.runs).filter(r => r.ext), expect = Math.ceil((runsExt.reduce((s, r) => s + Math.ceil((r.b - r.a) / sp) + 5, 0) + 8) * 1.1);
+  assert.strictEqual(find('Framing', /^2x6 studs/).qty, expect);
+  assert.ok(find('Framing', /^2x6 studs/).qty > 24 / sp, 'at least one stud per spacing of outside wall');
+  /* slab: 32 m2 x 4 in = 3.25 m3 = 4.3 yd3 */
+  assert.ok(Math.abs(find('Concrete', /in slab$/).qty - 4.3) < 0.11, `slab ${find('Concrete', /in slab$/).qty}`);
+  const order = find('Concrete', /to order/).qty, parts = find('Concrete', /footing/).qty + find('Concrete', /Frost wall/).qty + find('Concrete', /in slab$/).qty;
+  assert.ok(order >= parts && order < parts * 1.2, 'ordered concrete is the parts plus waste');
+  /* slab on grade has no frost wall and needs less concrete */
+  const slabOnly = run('takeoff(__pl, {foundation: "slab"})');
+  assert.ok(!Array.from(Array.from(slabOnly.groups).find(g => g.title === 'Concrete').lines).some(l => /Frost wall/.test(l.name)));
+  /* plumbing: toilet, lavatory, tub in the bath and the kitchen sink; 3 in main because there is a toilet */
+  assert.strictEqual(t.plumbing.main, 3);
+  assert.ok(Array.from(t.plumbing.fixtures).length >= 4);
+  assert.ok(find('Drain, waste and vent', /^3 in/).qty > 0 && find('Drain, waste and vent', /^2 in/).qty > 0 && find('Drain, waste and vent', /^1-1\/2 in/).qty > 0);
+  assert.strictEqual(find('Drain, waste and vent', /Closet flange/).qty, 1);
+  /* electrical: metres of cable, kitchen and bath on 20 A, a range circuit */
+  const w14 = find('Electrical rough-in', /^14\/2/);
+  assert.ok(w14.unit === 'm' && w14.qty > 30 && w14.qty < 400, `14/2: ${w14.qty} m`);
+  assert.ok(find('Electrical rough-in', /^12\/2/).qty > 0 && find('Electrical rough-in', /^8\/3/).qty > 0);
+  assert.strictEqual(find('Electrical rough-in', /GFCI/).qty, 1);
+  assert.strictEqual(find('Electrical rough-in', /40 A/).qty, 1);
+  /* a bigger home needs more of everything */
+  ctx.__pl2 = run(`__pl.concat([planRoom({id:'c',name:'Bed',type:'bedroom',x:0,y:4,W:8,D:4,doorWall:'N',doorPos:0.3,winWall:'S',winPos:0.5,overrides:{},removed:[]}, 'scandi', 9000)])`);
+  const t2 = run('takeoff(__pl2, {})');
+  assert.ok(t2.ext > t.ext && t2.int > t.int);
+  const f2 = (g, re) => Array.from(Array.from(t2.groups).find(x => x.title === g).lines).find(l => re.test(l.name)).qty;
+  assert.ok(f2('Framing', /^2x4 studs/) > find('Framing', /^2x4 studs/).qty && f2('Electrical rough-in', /^14\/2/) > w14.qty && f2('Concrete', /to order/) > order);
+  const csv = run('takeoffCsv(__t)');
+  assert.ok(csv.startsWith('"Group","Item","Quantity","Unit","Basis"') && csv.split('\r\n').length > 25);
+  /* empty plan does not throw */
+  assert.strictEqual(run('takeoff([], {}).ext'), 0);
+});
+
+test('recognized rooms are pulled onto shared walls so walls are not counted twice', () => {
+  /* Two rooms 0.2 m apart (a wall thickness), and one below them, as the detector returns them. */
+  ctx.__rs = [{ x: 0.1, y: 0.1, W: 3.9, D: 3.8 }, { x: 4.2, y: 0.1, W: 3.7, D: 3.8 }, { x: 0.1, y: 4.1, W: 7.8, D: 2.9 }];
+  const rs = Array.from(run('PlanRecognizer.snapRooms(__rs)'));
+  assert.ok(Math.abs(rs[0].x + rs[0].W - rs[1].x) < 1e-9, 'side neighbours share a wall');
+  assert.ok(Math.abs(rs[0].y + rs[0].D - rs[2].y) < 1e-9 && Math.abs(rs[1].y + rs[1].D - rs[2].y) < 1e-9, 'stacked neighbours share a wall');
+  assert.ok(Math.abs(rs[0].x - rs[2].x) < 1e-9 && Math.abs(rs[1].x + rs[1].W - (rs[2].x + rs[2].W)) < 1e-9, 'outer edges line up');
+  ctx.__pp = run(`__rs.map((r, i) => planRoom(Object.assign({id: 'r' + i, name: 'R' + i, type: 'bedroom', doorWall: 'S', doorPos: 0.5, winWall: 'N', winPos: 0.5, overrides: {}, removed: []}, r), 'scandi', 5000))`);
+  const t = run('takeoff(__pp, {})');
+  assert.ok(t.int > 10 && t.int < 13, `inside walls ${t.int}`);          // 3.8 between the top rooms + 7.9 under them
+  assert.ok(Math.abs(t.ext - 2 * (rs[2].W + rs[0].D + rs[2].D)) < 0.2, `outside walls ${t.ext}`);
+});

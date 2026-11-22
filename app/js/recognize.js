@@ -160,5 +160,27 @@ const PlanRecognizer = (function () {
     if (bare) { const n = parseInt(bare[1], 10); if ([100, 125, 150, 200, 250, 300, 400, 500, 750, 1000, 1250, 2000, 2500, 5000].indexOf(n) >= 0) return { ratio: n, raw: '1:' + n }; }
     return null;
   }
-  return { detect, detectPixels, guessTypes, label, scaleFromText, TYPES };
+  /* Detected rooms stop at the faces of the walls between them, so neighbours are a wall thickness apart.
+     Pull edges that lie within `tol` metres of each other onto one line, so neighbours share their wall. Changes rooms in place. */
+  function snapRooms(rooms, tol) {
+    tol = tol || 0.35;
+    const snapAxis = (lo, size) => {
+      const edges = []; rooms.forEach((r, i) => { edges.push({ i, v: r[lo], end: 0 }); edges.push({ i, v: r[lo] + r[size], end: 1 }); });
+      edges.sort((a, b) => a.v - b.v);
+      let k = 0;
+      while (k < edges.length) {
+        let j = k; while (j + 1 < edges.length && edges[j + 1].v - edges[k].v <= tol) j++;
+        const mean = Math.round(edges.slice(k, j + 1).reduce((s, e) => s + e.v, 0) / (j - k + 1) * 10) / 10;
+        for (let m = k; m <= j; m++) edges[m].to = mean;
+        k = j + 1;
+      }
+      rooms.forEach((r, i) => {
+        const a = edges.find(e => e.i === i && e.end === 0).to, b = edges.find(e => e.i === i && e.end === 1).to;
+        if (b - a >= 1.6) { r[lo] = a; r[size] = Math.round((b - a) * 10) / 10; }
+      });
+    };
+    snapAxis('x', 'W'); snapAxis('y', 'D');
+    return rooms;
+  }
+  return { detect, detectPixels, guessTypes, label, scaleFromText, snapRooms, TYPES };
 })();
