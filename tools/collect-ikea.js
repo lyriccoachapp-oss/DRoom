@@ -54,12 +54,16 @@ function rowFromHtml(html, kind) {
   let w = cm(p.width), d = cm(p.depth), h = cm(p.height);
   if (kind === 'rug' && !d) d = cm(p.length) || cm(p.depth);
   if (kind === 'bed' && !d) d = cm(p.length);
+  /* A floor lamp page often gives only a height. Its footprint hardly varies, so a standard one is assumed and the row says so. */
+  let assumed = false;
+  if (kind === 'lamp' && !(w > 0 && d > 0)) { w = w > 0 ? w : d > 0 ? d : 40; d = d > 0 ? d : w; assumed = true; }
   if (!(price > 0) || !(w > 0) || !(d > 0)) return null;
   if (/outdoor/i.test(String(p.category))) return null;
   const img = Array.isArray(p.image) ? p.image[0] : p.image, parts = String(p.name).split(' - ');
   const row = { sku: String(p.sku || p.mpn), name: String(p.name).slice(0, 140), category: CATEGORY[kind] || String(p.category || ''), droom_category: kind, store_category: p.category || undefined,
     price, currency: offer.priceCurrency || undefined, width_cm: w, depth_cm: d, height_cm: h || undefined, color: parts[1] ? parts.slice(1).join(' ').slice(0, 60) : undefined,
     url: p.url || offer.url, image: img && (img.contentUrl || img.url || (typeof img === 'string' ? img : undefined)) };
+  if (assumed) row.size_assumed = true;
   if (model) row.model_glb = model;
   return row;
 }
