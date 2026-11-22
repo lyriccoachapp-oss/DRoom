@@ -131,7 +131,9 @@ const Scene3D = (function () {
       let fmat;
       if (fin) {
         const tile = fin.cat === 'tile', tex = (tile ? tileTexture(fin.item.c1) : base).clone(); tex.needsUpdate = true;
-        tex.repeat.set(tile ? 1 / 1.6 : 1 / 2.2, tile ? 1 / 1.6 : 1 / 2.2); texes.push(tex);
+        /* The tile texture holds 4 by 4 tiles; a store product with a known size is drawn at that size. */
+        const it = fin.item, real = tile && it.tw > 0.04;
+        tex.repeat.set(real ? 1 / (4 * it.tl) : tile ? 1 / 1.6 : 1 / 2.2, real ? 1 / (4 * it.tw) : tile ? 1 / 1.6 : 1 / 2.2); texes.push(tex);
         fmat = new THREE.MeshStandardMaterial({ map: tex, roughness: tile ? 0.45 : 0.75 });
       } else fmat = M(0x9a9a98, 0.95);
       const fl = outlineMesh(o, fmat, false); fl.receiveShadow = true; fl.userData.floor = true; g.add(fl); floors.push(fl);
