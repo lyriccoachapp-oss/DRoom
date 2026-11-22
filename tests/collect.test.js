@@ -82,6 +82,8 @@ test('an IKEA product page becomes a feed row, and product addresses are sorted 
   assert.strictEqual(rowFromHtml(ld(Object.assign({}, product, { width: undefined })), 'sofa'), null, 'no size, no row');
   assert.strictEqual(rowFromHtml(ld(Object.assign({}, product, { category: 'Outdoor lounge furniture' })), 'sofa'), null);
   assert.strictEqual(rowFromHtml('<html></html>', 'sofa'), null);
+  const lamp = rowFromHtml(ld(Object.assign({}, product, { name: 'EXAMPEL Floor lamp - black', width: undefined, depth: undefined, height: '153 cm' })), 'lamp');
+  assert.deepStrictEqual({ w: lamp.width_cm, d: lamp.depth_cm, h: lamp.height_cm, a: lamp.size_assumed }, { w: 40, d: 40, h: 153, a: true }, 'a floor lamp with no footprint gets a standard one');
 
   const all = Object.keys(KINDS), k = slug => kindOfUrl('https://www.ikea.com/ca/en/p/' + slug + '/', all);
   assert.strictEqual(k('exampel-sofa-testby-grey-s12345678'), 'sofa');
