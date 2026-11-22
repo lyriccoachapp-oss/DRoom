@@ -11,6 +11,7 @@ function fmtLen(m) {
   return ft + '′' + (inch ? inch + '″' : '');
 }
 function fmtDims(it) {
+  if (CATS[it.cat].unit) return money(it.price) + ' / ' + CATS[it.cat].unit;
   if (CATS[it.cat].area) return UNITS.v === 'm' ? money(it.price) + ' / m\u00b2' : '$' + (it.price / 10.7639).toFixed(2) + ' / ft\u00b2';
   const f = UNITS.v === 'm' ? v => Math.round(v * 100) : v => Math.round(v / 0.0254), u = UNITS.v === 'm' ? ' cm' : ' in';
   return it.cat === 'rug' ? f(it.d) + ' × ' + f(it.w) + u : f(it.w) + ' × ' + f(it.d) + ' × ' + f(it.h) + u;
@@ -63,9 +64,13 @@ const CATS = {
   bathcab: { name: 'Linen cabinet', base: 180, sizes: [[0.4, 0.35, 1.8, '', 1]] },
   /* finishes, priced per square metre of floor (10% waste added to the quantity) */
   floor: { name: 'Plank flooring', base: 38, area: true, sizes: [[0, 0, 0, '', 1]] },
-  tile: { name: 'Floor tile', base: 46, area: true, sizes: [[0, 0, 0, '', 1]] }
+  tile: { name: 'Floor tile', base: 46, area: true, sizes: [[0, 0, 0, '', 1]] },
+  /* wall paint, priced per gallon; a gallon covers about 37 m\u00b2 (400 ft\u00b2) per coat, two coats */
+  paint: { name: 'Wall paint', base: 38, unit: 'gal', sizes: [[0, 0, 0, '', 1]] }
 };
 const CERAMIC = 0xf4f4f1, STEEL = 0xb9bdc2;
+/* Wall colours offered in the room panel. */
+const PAINTS = [['White', '#F4F2EC'], ['Warm white', '#EFE6D8'], ['Greige', '#D4CBBE'], ['Sage', '#B7C2AB'], ['Sky', '#C7D7E1'], ['Clay', '#D8B79E'], ['Charcoal', '#5B5F64'], ['Navy', '#3C4B64']];
 /* `all` is in priority order. Optional items are dropped from the end when the budget is short. `weight` splits the home budget. */
 const ROOMS = {
   living: { name: 'Living room', weight: 1, all: ['sofa', 'tvstand', 'coffee', 'floor', 'rug', 'armchair', 'shelf', 'lamp', 'plant'], required: ['sofa', 'tvstand', 'coffee'] },

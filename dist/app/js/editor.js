@@ -35,6 +35,29 @@ const PlanEditor = (function () {
     const a = wallPoint(r, w, t - wd / 2), b = wallPoint(r, w, t + wd / 2), c = wallPoint(r, w, t);
     return { x1: (o.x + a[0]) * S, y1: (o.y + a[1]) * S, x2: (o.x + b[0]) * S, y2: (o.y + b[1]) * S, cx: (o.x + c[0]) * S, cy: (o.y + c[1]) * S };
   }
+  /* Plan symbol for the door, drawn the way architectural plans show it. */
+  function doorSymbol(o, r, g) {
+    const dr = r.door, w = dr.width, n = WALLS[dr.wall].n, hz = WALLS[dr.wall].horiz, along = hz ? [1, 0] : [0, 1], left = dr.side === 'left';
+    const P = (t, off) => { const p = wallPoint(r, dr.wall, t); return [(o.x + p[0] + n[0] * off) * S, (o.y + p[1] + n[1] * off) * S]; };
+    const t0 = dr.t - w / 2, t1 = dr.t + w / 2;
+    if (dr.type === 'swing') {
+      /* Leaf drawn fully open, plus the quarter circle its edge sweeps. */
+      const hinge = left ? t0 : t1, a = left ? 1 : -1, s = dr.swing === 'in' ? 1 : -1, pts = [];
+      for (let k = 0; k <= 12; k++) {
+        const th = Math.PI / 2 * k / 12, lt = hinge + a * w * Math.cos(th), off = s * w * Math.sin(th);
+        pts.push(P(lt, off));
+      }
+      const h = P(hinge, 0), tip = pts[pts.length - 1];
+      el('line', { x1: h[0], y1: h[1], x2: tip[0], y2: tip[1], class: 'leaf' }, g);
+      el('polyline', { points: pts.map(p => p.join(',')).join(' '), class: 'swingarc' }, g);
+    } else if (dr.type === 'pocket') {
+      const a = left ? P(t0 - w, 0.03) : P(t1, 0.03), b = left ? P(t0 + 0.15 * w, 0.03) : P(t1 + w, 0.03);
+      el('line', { x1: a[0], y1: a[1], x2: b[0], y2: b[1], class: 'leaf pocket' }, g);
+    } else if (dr.type === 'barn') {
+      const a = left ? P(t0 - w, 0.1) : P(t1 - 0.04, 0.1), b = left ? P(t0 + 0.04, 0.1) : P(t1 + w, 0.1);
+      el('line', { x1: a[0], y1: a[1], x2: b[0], y2: b[1], class: 'leaf barn' }, g);
+    }
+  }
   function render() {
     const st = get();
     if (!drag || !fitted) fit(st.rooms);
@@ -47,16 +70,23 @@ const PlanEditor = (function () {
     if (!st.rooms.length) { el('text', { x: vb[0] + vb[2] / 2, y: vb[1] + vb[3] / 2, class: 'hintText', 'text-anchor': 'middle' }, svg, st.trace ? 'Detect rooms or add them by hand' : 'Add a room to start'); drawCal(); return; }
     st.rooms.forEach((o, i) => {
       const pl = st.plans[i], on = o.id === st.roomId, g = el('g', { class: 'rm' + (on ? ' on' : '') + (st.clash && st.clash.has(o.id) ? ' clash' : '') }, svg);
-      el('rect', { x: o.x * S, y: o.y * S, width: o.W * S, height: o.D * S, class: 'room', 'data-act': 'move', 'data-room': o.id }, g);
+      el('path', { d: 'M ' + roomPolygon(o).map(p => ((o.x + p[0]) * S) + ' ' + ((o.y + p[1]) * S)).join(' L ') + ' Z', class: 'room', 'data-act': 'move', 'data-room': o.id }, g);
       if (pl) pl.placed.filter(q => q.cat !== 'uppers').forEach(q => el('rect', { x: (o.x + q.cx - q.hx) * S, y: (o.y + q.cz - q.hz) * S, width: q.hx * 2 * S, height: q.hz * 2 * S, rx: 6, class: 'furn' + (q.flat ? ' rug' : '') + (st.sel && st.sel.roomId === o.id && st.sel.cat === q.cat ? ' sel' : '') }, g));
       if (pl) {
-        const d = opening(o, pl.r, pl.r.door.wall, pl.r.door.t, 0.9), w = opening(o, pl.r, pl.r.win.wall, pl.r.win.t, 1.4);
+        const d = opening(o, pl.r, pl.r.door.wall, pl.r.door.t, pl.r.door.width + 0.04), w = opening(o, pl.r, pl.r.win.wall, pl.r.win.t, 1.4);
         el('line', { x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2, class: 'door' }, g);
+        doorSymbol(o, pl.r, g);
         el('line', { x1: w.x1, y1: w.y1, x2: w.x2, y2: w.y2, class: 'win' }, g);
         if (on) {
           el('circle', { cx: d.cx, cy: d.cy, r: 16, class: 'grip', 'data-act': 'door', 'data-room': o.id }, g);
           el('circle', { cx: w.cx, cy: w.cy, r: 16, class: 'grip win', 'data-act': 'win', 'data-room': o.id }, g);
-          el('rect', { x: (o.x + o.W) * S - 18, y: (o.y + o.D) * S - 18, width: 36, height: 36, rx: 6, class: 'grip size', 'data-act': 'resize', 'data-room': o.id }, g);
+          /* The resize handle sits on the south-east corner, or beside the notch when the notch takes that corner. */
+          const c = cutOf(o), rz = c && c.corner === 'SE' ? [o.x + c.x0, o.y + o.D] : [o.x + o.W, o.y + o.D];
+          el('rect', { x: rz[0] * S - 18, y: rz[1] * S - 18, width: 36, height: 36, rx: 6, class: 'grip size', 'data-act': 'resize', 'data-room': o.id }, g);
+          if (c) {
+            const ix = o.x + (c.x0 === 0 ? c.x1 : c.x0), iz = o.y + (c.z0 === 0 ? c.z1 : c.z0);
+            el('rect', { x: ix * S - 15, y: iz * S - 15, width: 30, height: 30, rx: 15, class: 'grip notch', 'data-act': 'notch', 'data-room': o.id }, g);
+          }
         }
       }
       const lab = el('text', { x: o.x * S - 6, y: o.y * S - 22, class: 'rname' }, g, o.name + '  ');
@@ -94,6 +124,11 @@ const PlanEditor = (function () {
     if (drag.act === 'move') {
       o.x = edgeSnap(snap(drag.ox + p.x - drag.sx), o.W, others, 'x');
       o.y = edgeSnap(snap(drag.oy + p.y - drag.sy), o.D, others, 'y');
+    } else if (drag.act === 'notch') {
+      const c = cutOf(o); if (!c) return;
+      const px = snap(p.x - o.x), pz = snap(p.y - o.y);
+      o.cut.w = Math.round(clamp(c.x0 === 0 ? px : o.W - px, 0.5, o.W - 1.2) * 10) / 10;
+      o.cut.d = Math.round(clamp(c.z0 === 0 ? pz : o.D - pz, 0.5, o.D - 1.2) * 10) / 10;
     } else if (drag.act === 'resize') {
       let W = snap(p.x - o.x), D = snap(p.y - o.y);
       others.forEach(x => { [x.x, x.x + x.W].forEach(c => { if (Math.abs(c - (o.x + W)) < 0.16) W = c - o.x; }); [x.y, x.y + x.D].forEach(c => { if (Math.abs(c - (o.y + D)) < 0.16) D = c - o.y; }); });
