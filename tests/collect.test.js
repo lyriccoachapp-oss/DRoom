@@ -104,3 +104,16 @@ test('an IKEA product page becomes a feed row, and product addresses are sorted 
   const it = vm.runInContext('BYID["s:ikea:123.456.78"]', ctx);
   assert.ok(it.cat === 'sofa' && it.si === 2 && Math.abs(it.w - 2.18) < 1e-9 && Math.abs(it.h - 0.85) < 1e-9);
 });
+
+test('Home Depot Canada titles give the box coverage and the face size, not the thickness', () => {
+  const m = parseMaterial('Valley Wood 6.5mm x 7.5 in. W x 47.6 in. L 22MIL Click Lock Waterproof Luxury Vinyl Plank Flooring (19.8 sq.ft./case)', []);
+  assert.deepStrictEqual({ k: m.kind, w: m.width_in, l: m.length_in, c: m.coverage_sqft }, { k: 'floor', w: 7.5, l: 47.6, c: 19.8 });
+  const t = parseMaterial('Kingston Sand 3 in. x 8 in. Polished Ceramic Wall Tile (5.38 Sq. Ft. / Case)', []);
+  assert.deepStrictEqual({ k: t.kind, w: t.width_in, l: t.length_in, c: t.coverage_sqft }, { k: 'walltile', w: 3, l: 8, c: 5.38 });
+  const row = rowFrom({ product_id: 'C1', title: '12-inch x 24-inch Carrara Porcelain Floor & Wall Tile(15.5 sq.ft. / case)', price: 36.27 }, null, 'tile');
+  assert.deepStrictEqual({ u: row.price_unit, s: row.price_per_sqft, w: row.tile_width_in, l: row.tile_length_in }, { u: 'box', s: 2.34, w: 12, l: 24 });
+  const paper = rowFrom({ product_id: 'P1', title: 'Lykke Blue Wallpaper', price: 64.98 }, null, 'wallpaper');
+  assert.deepStrictEqual({ c: paper.coverage_sqft, a: paper.coverage_assumed, s: paper.price_per_sqft }, { c: 28, a: true, s: 2.32 });
+  const p56 = rowFrom({ product_id: 'P2', title: '56 sq. ft. Pre-Pasted Paintable Wallpaper in White', price: 39.98 }, null, 'wallpaper');
+  assert.ok(p56.coverage_sqft === 56 && !p56.coverage_assumed);
+});

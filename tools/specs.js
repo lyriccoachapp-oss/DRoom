@@ -22,10 +22,15 @@ function inches(text, fallback) {
 /* "12 in. x 24 in.", "7.1-inch W x 48-inch L", "300 x 600 mm" -> [a, b] in inches */
 function pairFromText(text) {
   const re = new RegExp(NUM + '\\s*-?\\s*' + UNIT + '?\\.?\\s*(?:w|l|wide|long|width|length)?\\.?\\s*[x×]\\s*' + NUM + '\\s*-?\\s*' + UNIT + '?(?![a-z])', 'i');
-  const m = String(text || '').toLowerCase().match(re);
-  if (!m) return null;
-  const u2 = m[4], u1 = m[2] || u2 || 'in', a = fraction(m[1]) * (UNIT_IN[u1] || 1), b = fraction(m[3]) * (UNIT_IN[u2 || u1] || 1);
-  return a > 0 && b > 0 ? [a, b] : null;
+  /* A title may lead with the thickness ("6.5mm x 7.5 in. W x 47.6 in. L"); the first pair with both sides over an inch is the face. */
+  const t = String(text || '').toLowerCase(), g = new RegExp(re.source, 'gi');
+  let m;
+  while ((m = g.exec(t))) {
+    const u2 = m[4], u1 = m[2] || u2 || 'in', a = fraction(m[1]) * (UNIT_IN[u1] || 1), b = fraction(m[3]) * (UNIT_IN[u2 || u1] || 1);
+    if (a >= 1 && b >= 1) return [a, b];
+    g.lastIndex = m.index + 1;
+  }
+  return null;
 }
 const round = (v, n) => Math.round(v * Math.pow(10, n)) / Math.pow(10, n);
 
@@ -62,6 +67,8 @@ function parseMaterial(title, specs) {
   const cov = specs.find(x => /coverage|sq(uare|\.)? ?(ft|feet|foot).*(case|box|carton|roll|package)|(case|box|carton|roll|package).*sq(uare|\.)? ?(ft|feet|foot)/i.test(x.name));
   if (cov) { const v = parseFloat(String(cov.value).replace(/,/g, '')); if (v > 0) out.coverage_sqft = round(/m2|m²|sq\.? ?m\b|square met/i.test(cov.name + ' ' + cov.value) ? v * 10.7639 : v, 2); }
   const pcs = find(specs, /(pieces|tiles|planks|pcs).*(case|box|carton|package)|number of pieces/i); if (pcs && parseInt(pcs, 10) > 0) out.pieces_per_box = parseInt(pcs, 10);
+  /* Home Depot Canada puts the box coverage in the title: "(15.5 sq.ft. / case)", "56 sq. ft. Pre-Pasted Wallpaper". */
+  if (!out.coverage_sqft) { const c = String(title || '').toLowerCase().match(/(\d+(?:\.\d+)?)\s*sq\.?\s*f(?:ee)?t\.?/); if (c && parseFloat(c[1]) > 0) { out.coverage_sqft = parseFloat(c[1]); out.coverage_from_title = true; } }
   if (!out.coverage_sqft && out.pieces_per_box && out.width_in) out.coverage_sqft = round(out.pieces_per_box * out.width_in * out.length_in / 144, 2);
   if (kind === 'wallpaper' && !out.coverage_sqft) { const rw = len(/roll width/i) || w, rl = inches(find(specs, /roll length/i) || '', 'ft') || l; if (rw > 0 && rl > 0) out.coverage_sqft = round(rw * rl / 144, 2); }
   const text = (re, not) => { const v = find(specs, re, not); return v ? v.trim().slice(0, 60) : undefined; };

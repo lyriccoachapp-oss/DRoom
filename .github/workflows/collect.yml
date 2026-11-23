@@ -41,6 +41,7 @@ jobs:
           LIMIT: ${{ inputs.limit }}
           PAGES: ${{ inputs.pages }}
           PHOTOS: ${{ inputs.photos }}
+          DEBUG_HITS: "1"
         run: |
           if [ -z "$SERPAPI_KEY" ]; then echo "The repository secret SERPAPI_KEY is not set."; exit 1; fi
           IMG=""; if [ "$PHOTOS" = "true" ]; then IMG="--images catalog/img/homedepot-$COUNTRY"; fi

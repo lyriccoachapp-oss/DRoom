@@ -59,11 +59,13 @@ function rowFrom(hit, detail, wantKind) {
     model: pr.model_number || hit.model_number || undefined, category: CATEGORY[m.kind], droom_category: m.kind, price: p,
     url: firstUrl(pr.link || hit.link) || undefined, image: firstUrl(pr.images) || firstUrl(hit.thumbnails) || firstUrl(hit.thumbnail) || undefined };
   if (m.width_in) { row.tile_width_in = m.width_in; row.tile_length_in = m.length_in; }
-  ['thickness_in', 'coverage_sqft', 'pieces_per_box', 'color', 'finish', 'material', 'look', 'use'].forEach(k => { if (m[k] != null) row[k] = m[k]; });
+  ['thickness_in', 'coverage_sqft', 'coverage_from_title', 'pieces_per_box', 'color', 'finish', 'material', 'look', 'use'].forEach(k => { if (m[k] != null) row[k] = m[k]; });
   /* Tile and flooring are sold by the square foot or by the box; say which, so the planner can price a square foot. */
   if (m.kind !== 'paint') {
     if (/sq\.? ?ft|sqft|square f/.test(unitText)) { row.price_unit = 'sqft'; row.price_per_sqft = p; }
     else if (m.coverage_sqft) { row.price_unit = 'box'; row.price_per_sqft = Math.round(p / m.coverage_sqft * 100) / 100; }
+    /* A wallpaper roll with no stated coverage is taken as a standard single roll of 28 sq ft, and marked so. */
+    else if (m.kind === 'wallpaper') { row.coverage_sqft = 28; row.coverage_assumed = true; row.price_unit = 'box'; row.price_per_sqft = Math.round(p / 28 * 100) / 100; }
   }
   return row;
 }
@@ -97,6 +99,7 @@ async function main() {
     for (const q of QUERIES[kind]) for (let page = 1; page <= pages && n < limit; page++) {
       let list; try { list = (await api({ engine: 'home_depot', q, page })).products || []; } catch (e) { console.error(e.message); break; }
       if (!list.length) break;
+      if (process.env.DEBUG_HITS && !main.dumped) { main.dumped = true; console.log('FIRST-HIT ' + JSON.stringify(list[0])); }
       for (const hit of list) {
         if (n >= limit) break;
         const id = String(hit.product_id || hit.title); if (seen.has(id)) continue; seen.add(id);
