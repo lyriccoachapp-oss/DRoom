@@ -1,0 +1,51 @@
+name: collect catalog
+# Run by hand from the Actions tab. Collects Home Depot finishing materials through SerpApi and
+# attaches the feed (and photos) to the run as a downloadable file. Needs the repository secret SERPAPI_KEY.
+on:
+  workflow_dispatch:
+    inputs:
+      country:
+        description: Home Depot site
+        type: choice
+        options: [ca, us]
+        default: ca
+      kinds:
+        description: Material groups
+        default: tile,walltile,floor,wallpaper
+      limit:
+        description: Products per group
+        default: '40'
+      pages:
+        description: Result pages per search
+        default: '2'
+permissions:
+  contents: read
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Collect
+        env:
+          SERPAPI_KEY: ${{ secrets.SERPAPI_KEY }}
+          COUNTRY: ${{ inputs.country }}
+          KINDS: ${{ inputs.kinds }}
+          LIMIT: ${{ inputs.limit }}
+          PAGES: ${{ inputs.pages }}
+        run: |
+          if [ -z "$SERPAPI_KEY" ]; then echo "The repository secret SERPAPI_KEY is not set."; exit 1; fi
+          node tools/collect-homedepot.js --country "$COUNTRY" --kinds "$KINDS" --limit "$LIMIT" --pages "$PAGES" \
+            --images "catalog/img/homedepot-$COUNTRY" --out "catalog/homedepot-$COUNTRY.json" | tee catalog-summary.txt
+          cat catalog-summary.txt >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: homedepot-${{ inputs.country }}
+          path: |
+            catalog/homedepot-*.json
+            catalog/img
+            catalog-summary.txt
+          retention-days: 3
