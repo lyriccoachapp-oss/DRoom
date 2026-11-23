@@ -47,6 +47,11 @@ jobs:
           node tools/collect-homedepot.js --country "$COUNTRY" --kinds "$KINDS" --limit "$LIMIT" --pages "$PAGES" \
             $IMG --out "catalog/homedepot-$COUNTRY.json" 2>&1 | tee catalog-summary.txt
           cat catalog-summary.txt >> "$GITHUB_STEP_SUMMARY"
+      - name: Print the feed into the log
+        if: always()
+        # Some clients can read run logs but not artifact storage; the feed is also printed here, compressed.
+        run: |
+          for f in catalog/homedepot-*.json; do [ -f "$f" ] || continue; echo "FEED-BEGIN $f"; gzip -9c "$f" | base64 -w 0; echo; echo "FEED-END"; done
       - uses: actions/upload-artifact@v4
         if: always()
         with:
