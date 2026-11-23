@@ -10,7 +10,7 @@
    Options: --kinds tile,walltile,floor,wallpaper,paint   which groups to collect (default: all)
             --pages N        result pages per search query (default 1)
             --limit N        stop after N products per kind (default 60)
-            --country ca|us  (default ca)
+            --country ca|us  (default ca; specifications are only available for us)
             --out FILE       feed to write (default catalog/homedepot.json)
             --images DIR     also download one photo per product into DIR
             --no-details     skip the per-product request; sizes then come from titles only
@@ -55,7 +55,7 @@ function rowFrom(hit, detail, wantKind) {
   if (!m || (wantKind && m.kind !== wantKind && !(wantKind === 'tile' && m.kind === 'walltile') && !(wantKind === 'walltile' && m.kind === 'tile'))) return null;
   const p = price(pr.price != null ? pr.price : hit.price), unitText = String(pr.unit || hit.unit || pr.price_unit || '').toLowerCase();
   if (!p) return null;
-  const row = { sku: String(hit.product_id || pr.product_id || hit.model_number || title).slice(0, 60), name: title.slice(0, 140), brand: pr.brand || hit.brand || undefined,
+  const row = { sku: String(hit.product_id || pr.product_id || hit.model_number || title).slice(0, 60), name: title.slice(0, 140), brand: (pr.brand && pr.brand.name) || (typeof pr.brand === 'string' ? pr.brand : null) || hit.brand || undefined,
     model: pr.model_number || hit.model_number || undefined, category: CATEGORY[m.kind], droom_category: m.kind, price: p,
     url: firstUrl(pr.link || hit.link) || undefined, image: firstUrl(pr.images) || firstUrl(hit.thumbnails) || firstUrl(hit.thumbnail) || undefined };
   if (m.width_in) { row.tile_width_in = m.width_in; row.tile_length_in = m.length_in; }
@@ -74,7 +74,10 @@ async function main() {
   if (!key) { console.error('Set SERPAPI_KEY (the same key the CRM uses).'); process.exit(1); }
   const kinds = String(arg('kinds', Object.keys(QUERIES).join(','))).split(',').filter(k => QUERIES[k]);
   const pages = parseInt(arg('pages', '1'), 10), limit = parseInt(arg('limit', '60'), 10), country = arg('country', 'ca');
-  const out = arg('out', 'catalog/homedepot.json'), imgDir = arg('images', null), details = !process.argv.includes('--no-details');
+  const out = arg('out', 'catalog/homedepot.json'), imgDir = arg('images', null);
+  /* SerpApi's product lookup covers The Home Depot US only; for Canada the facts come from search results and titles. */
+  const details = !process.argv.includes('--no-details') && country === 'us';
+  if (country !== 'us') console.log('Country ' + country + ': product specifications are not available from SerpApi, so sizes are read from titles only. Use --country us for full specifications.');
   const cache = path.join(path.dirname(out), '.cache-homedepot'); fs.mkdirSync(cache, { recursive: true });
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   let spent = 0;
