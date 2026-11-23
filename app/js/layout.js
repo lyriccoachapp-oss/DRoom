@@ -185,14 +185,14 @@ function runLayout(r,want,forced){
     if(sofa){
       const front=sofa.gap+sofa.d; let coffee=null;
       /* Coffee table in front of the sofa: centred first, then nudged along the sofa or a little farther out to clear a door swing. */
-      if(want.has('coffee')){const si=sizes('coffee')[0],sz=dims('coffee',si);
+      if(want.has('coffee'))for(const si of sizes('coffee')){const sz=dims('coffee',si);if(coffee)break;
         search:for(const dO of [0.4,0.5,0.6])for(const dt of (part?[-part.sg*0.5,-part.sg*0.35,-part.sg*0.65]:[0,-0.15,0.15,-0.3,0.3])){const o=front+dO+sz[1]/2,rect=at(r,sw,sofa.t+dt,o,sz[0],sz[1]);
           if(ac-(o+sz[1]/2)-0.45>=0.5&&fits(rect,sz[2])){coffee=add('coffee',si,rect);break search;}}}
       if(want.has('rug')){const space=ac-front-0.45;
         for(const si of sizes('rug')){const sz=dims('rug',si);
           if(sz[0]<=len-0.3&&sz[1]<=space+0.3){const t=clamp(sofa.t,sz[0]/2+0.1,len-sz[0]/2-0.1);
             const rect=at(r,sw,t,front-0.3+sz[1]/2,sz[0],sz[1]);if(inRoom(r,rect)){add('rug',si,rect,{flat:true});break;}}}}
-      if(want.has('armchair')&&coffee){const si=sizes('armchair')[0],sz=dims('armchair',si),hz=WALLS[sw].horiz;
+      if(want.has('armchair')&&coffee)for(const si of sizes('armchair')){if(placed.some(p=>p.cat==='armchair'))break;const sz=dims('armchair',si),hz=WALLS[sw].horiz;
         const cand=[1,-1].map(sg=>{const t=sofa.t+sg*(coffee.w/2+0.45+sz[1]/2);const rect=at(r,sw,t,coffee.o,sz[1],sz[0]);
           rect.rot=Math.atan2(hz?-sg:0,hz?0:-sg);return rect;});
         cand.sort((a,b)=>Math.hypot(b.cx-r.doorRect.cx,b.cz-r.doorRect.cz)-Math.hypot(a.cx-r.doorRect.cx,a.cz-r.doorRect.cz));
@@ -213,7 +213,10 @@ function runLayout(r,want,forced){
       const rect=onWall(w2,sz[0],sz[1],sz[2],mid(w2),0.02);if(rect){hw=w2;bed=add('bed',si,rect);break outer;}}
     const len=wallLen(r,hw),ac=acrossOf(r,hw);
     if(bed){
-      if(want.has('nightstand')){const si=sizes('nightstand')[0],sz=dims('nightstand',si);
+      /* The larger nightstand is used only where it fits on as many sides of the bed as the smaller one would. */
+      const nsRect=(si,sg)=>{const z=dims('nightstand',si);return at(r,hw,bed.t+sg*(bed.w/2+0.06+z[0]/2),0.02+z[1]/2,z[0],z[1]);},nsCount=si=>[-1,1].filter(sg=>fits(nsRect(si,sg),dims('nightstand',si)[2])).length;
+      const nsBest=want.has('nightstand')?sizes('nightstand').reduce((b,si)=>nsCount(si)>nsCount(b)?si:b):0;
+      if(want.has('nightstand'))for(const si of [nsBest]){const sz=dims('nightstand',si);
         for(const sg of [-1,1]){const rect=at(r,hw,bed.t+sg*(bed.w/2+0.06+sz[0]/2),0.02+sz[1]/2,sz[0],sz[1]);if(fits(rect,sz[2]))add('nightstand',si,rect);}}
       if(want.has('rug'))for(const si of sizes('rug')){const sz=dims('rug',si);
         if(sz[0]<=len-0.2&&sz[1]<=ac-0.2){const t=clamp(bed.t,sz[0]/2+0.1,len-sz[0]/2-0.1);
@@ -248,7 +251,7 @@ function runLayout(r,want,forced){
     const dk=placed.find(p=>p.cat==='desk');
     if(dk){
       if(want.has('rug')&&(forced.rug==null||forced.rug===0)){const rs=dims('rug',0),rr=at(r,dk.wall,dk.t,dk.gap+dk.d+0.1+rs[1]/2,rs[0],rs[1]);if(inRoom(r,rr))add('rug',0,rr,{flat:true});}
-      if(want.has('ochair')){const si=sizes('ochair')[0],sz=dims('ochair',si),rect=at(r,dk.wall,dk.t,dk.gap+dk.d+0.08+sz[1]/2,sz[0],sz[1]);rect.rot=ROT[OPP[dk.wall]];if(fits(rect,0.5))add('ochair',si,rect);}
+      if(want.has('ochair'))for(const si of sizes('ochair')){const sz=dims('ochair',si),rect=at(r,dk.wall,dk.t,dk.gap+dk.d+0.08+sz[1]/2,sz[0],sz[1]);rect.rot=ROT[OPP[dk.wall]];if(fits(rect,0.5)){add('ochair',si,rect);break;}}
     }
     byWalls('shelf',order,0.45);
     corner('lamp',0.5,false);corner('plant',0.5,true);
