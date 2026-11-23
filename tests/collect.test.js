@@ -129,3 +129,9 @@ test('a tile priced per piece gets a price per square foot from its face', () =>
   assert.ok(Math.abs(ctx.__l.item.price - 4.76 / 2 * 10.7639) < 0.02);
   assert.strictEqual(vm.runInContext('boxesFor(__l) + boxWord(__l, boxesFor(__l))', ctx), '11 pieces');
 });
+
+test('a large tile with no stated unit and no box coverage is read as priced per piece, and marked', () => {
+  const row = rowFrom({ product_id: 'V1', title: '24-inch x 48-inch Vermont Oasis Matte Rectified Porcelain Tile', price: 22.32 }, null, 'tile');
+  assert.deepStrictEqual({ u: row.price_unit, a: row.price_unit_assumed, s: row.price_per_sqft }, { u: 'piece', a: true, s: 2.79 });
+  assert.strictEqual(rowFrom({ product_id: 'V2', title: 'Porcelain Tile Sample', price: 2 }, null, 'tile'), null, 'accessories and samples stay out');
+});
