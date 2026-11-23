@@ -62,7 +62,10 @@ function rowFrom(hit, detail, wantKind) {
   ['thickness_in', 'coverage_sqft', 'coverage_from_title', 'pieces_per_box', 'color', 'finish', 'material', 'look', 'use'].forEach(k => { if (m[k] != null) row[k] = m[k]; });
   /* Tile and flooring are sold by the square foot or by the box; say which, so the planner can price a square foot. */
   if (m.kind !== 'paint') {
+    if (unitText) row.store_unit = unitText.slice(0, 20);
     if (/sq\.? ?ft|sqft|square f/.test(unitText)) { row.price_unit = 'sqft'; row.price_per_sqft = p; }
+    /* Priced per tile or plank: one piece covers its own face. */
+    else if (/^(each|ea|piece|pc|pcs|unit)\.?$/.test(unitText) && m.width_in && m.kind !== 'wallpaper') { const a = m.width_in * m.length_in / 144; row.price_unit = 'piece'; row.coverage_sqft = Math.round(a * 1000) / 1000; row.price_per_sqft = Math.round(p / a * 100) / 100; }
     else if (m.coverage_sqft) { row.price_unit = 'box'; row.price_per_sqft = Math.round(p / m.coverage_sqft * 100) / 100; }
     /* A wallpaper roll with no stated coverage is taken as a standard single roll of 28 sq ft, and marked so. */
     else if (m.kind === 'wallpaper') { row.coverage_sqft = 28; row.coverage_assumed = true; row.price_unit = 'box'; row.price_per_sqft = Math.round(p / 28 * 100) / 100; }
