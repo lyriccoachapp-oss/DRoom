@@ -117,3 +117,15 @@ test('Home Depot Canada titles give the box coverage and the face size, not the 
   const p56 = rowFrom({ product_id: 'P2', title: '56 sq. ft. Pre-Pasted Paintable Wallpaper in White', price: 39.98 }, null, 'wallpaper');
   assert.ok(p56.coverage_sqft === 56 && !p56.coverage_assumed);
 });
+
+test('a tile priced per piece gets a price per square foot from its face', () => {
+  const row = rowFrom({ product_id: 'E1', title: '12-inch x 24-inch Vera Carrara Porcelain Floor and Wall Tile', price: 4.76, unit: 'each' }, null, 'tile');
+  assert.deepStrictEqual({ u: row.price_unit, c: row.coverage_sqft, s: row.price_per_sqft, su: row.store_unit }, { u: 'piece', c: 2, s: 2.38, su: 'each' });
+  const ctx = vm.createContext({ document: { querySelector() { return null; } }, console });
+  for (const f of ['catalog.js', 'stores.js', 'layout.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'app', 'js', f), 'utf8'), ctx, { filename: f });
+  ctx.__feed = JSON.stringify({ products: [row] });
+  assert.strictEqual(vm.runInContext('Stores.importFeed("homedepot", __feed)', ctx).added, 1);
+  ctx.__l = { area: true, qty: 2, item: vm.runInContext('BYID["s:homedepot:E1"]', ctx) };
+  assert.ok(Math.abs(ctx.__l.item.price - 4.76 / 2 * 10.7639) < 0.02);
+  assert.strictEqual(vm.runInContext('boxesFor(__l) + boxWord(__l, boxesFor(__l))', ctx), '11 pieces');
+});
