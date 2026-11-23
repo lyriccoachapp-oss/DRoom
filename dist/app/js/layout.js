@@ -294,11 +294,20 @@ function runLayout(r,want,forced){
    Returns {room, r, placed, lines, excluded, total, budget, notes}. */
 /* Paint for the walls: two coats over the wall area less the door and window. */
 function paintGallons(r){const wall=2*(r.W+r.D)*2.7-r.door.width*2.05-1.4*1.3;return Math.max(1,Math.ceil(wall*2/37-0.05));}
+/* Wall to cover, in square metres: every wall, or one accent wall, less the door and window on it. */
+function wallArea(r,on){
+  const H=2.7,door=r.door.width*2.05,win=1.4*1.3;
+  if(!WALLS[on])return Math.max(0,2*(r.W+r.D)*H-door-win);
+  const g=sideRange(r,on);
+  return Math.max(0,(g[1]-g[0])*H-(r.door.wall===on?door:0)-(r.win.wall===on?win:0));
+}
 function planRoom(room,style,budget,notes,others){
   notes=notes||[];
   const r=roomGeom(room,others),spec0=ROOMS[room.type],paint=/^#[0-9a-f]{6}$/i.test(room.wallColor||'');
   /* A chosen wall colour adds paint to the room, as a required line. */
-  const spec={all:spec0.all.concat(paint?['paint']:[]),required:spec0.required.concat(paint?['paint']:[])};
+  /* So does a wall finish: tile or wallpaper on every wall or on one accent wall. */
+  const fin=CATS[room.wallFinish]&&CATS[room.wallFinish].wall?room.wallFinish:null,extra=(paint?['paint']:[]).concat(fin?[fin]:[]);
+  const spec={all:spec0.all.concat(extra),required:spec0.required.concat(extra)};
   const forced={};
   for(const c in room.overrides){const it=BYID[room.overrides[c]];if(it&&spec.all.includes(c))forced[c]=it.si;else delete room.overrides[c];}
   const want=new Set(spec.all.filter(c=>!room.removed.includes(c)));
@@ -311,7 +320,8 @@ function planRoom(room,style,budget,notes,others){
   const excluded=[];
   spec.all.forEach(c=>{if(room.removed.includes(c))excluded.push({cat:c,reason:'removed'});else if(!has(c)&&!(c==='shower'&&has('tub')))excluded.push({cat:c,reason:'space'});});
   let active=spec.all.filter(c=>has(c)&&!room.removed.includes(c));
-  const qty=c=>CATS[c].unit?paintGallons(r):CATS[c].area?area:placed.filter(p=>p.cat===c&&!p.part).length;
+  const wallQty=Math.ceil(wallArea(r,room.wallFinishOn)*1.1*10)/10;
+  const qty=c=>CATS[c].unit?paintGallons(r):CATS[c].wall?wallQty:CATS[c].area?area:placed.filter(p=>p.cat===c&&!p.part).length;
   const si=c=>CATS[c].area||CATS[c].unit?0:placed.find(p=>p.cat===c).si;
   const tier={};active.forEach(c=>tier[c]=0);
   const itemOf=c=>Stores.styled(room.overrides[c]?BYID[room.overrides[c]]:Stores.pick(c,style,tier[c],si(c)),style);
@@ -325,7 +335,7 @@ function planRoom(room,style,budget,notes,others){
   while(changed){changed=false;
     for(const c of active){if(room.overrides[c]||tier[c]>=2)continue;tier[c]++;if(total()>budget)tier[c]--;else changed=true;}}
   placed=placed.filter(p=>active.includes(p.cat));
-  const lines=active.map(c=>({cat:c,item:itemOf(c),qty:qty(c),area:!!CATS[c].area,unit:CATS[c].unit||null}));
+  const lines=active.map(c=>({cat:c,item:itemOf(c),qty:qty(c),area:!!CATS[c].area,unit:CATS[c].unit||null,wall:CATS[c].wall?(WALLS[room.wallFinishOn]?room.wallFinishOn:'all'):null}));
   return {room,r,placed,lines,excluded,total:total(),budget,notes};
 }
 /* Would size `si` of this category fit, keeping every other placed item at its current size? */

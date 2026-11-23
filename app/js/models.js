@@ -125,6 +125,15 @@ BUILD.bathcab=function(g,it){const w=it.w,d=it.d,h=it.h,m=M(it.c2,.7),dk=M(shade
   B(g,w,h-0.06,d,m,0,0.06,0);B(g,w-0.04,0.06,d-0.06,dk,0,0,0);B(g,w-0.02,0.008,0.006,dk,0,h*0.5,d/2);B(g,0.018,0.2,0.022,M(it.c3,.4,.4),w/2-0.06,h*0.62,d/2+0.008);};
 /* Square-tile floor texture, tinted by the chosen tile. */
 const tileTex={};
+/* Wallpaper: a quiet vertical pattern in the product's colour, one metre wide. */
+const paperTex={};
+function wallpaperTexture(color){
+  if(paperTex[color])return paperTex[color];
+  const c=document.createElement('canvas');c.width=c.height=256;const x=c.getContext('2d');x.fillStyle=hex(shade(color,0.25));x.fillRect(0,0,256,256);
+  for(let i=0;i<8;i++){x.fillStyle=hex(shade(color,i%2?0.12:0));x.fillRect(i*32+10,0,i%2?4:12,256);}
+  const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.encoding=THREE.sRGBEncoding;t.anisotropy=4;
+  return paperTex[color]=t;
+}
 function tileTexture(color){
   if(tileTex[color])return tileTex[color];
   const c=document.createElement('canvas');c.width=c.height=256;const x=c.getContext('2d'),r=rnd(color);

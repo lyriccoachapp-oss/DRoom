@@ -52,7 +52,10 @@ const Scene3D = (function () {
     const box = (t0, t1, y0, y1, mat, depth, off) => {
       if (t1 - t0 < 0.005 || y1 - y0 < 0.005) return null;
       const d = depth || WT, c = pt((t0 + t1) / 2), q = (off == null ? d / 2 : off);
-      const m = new THREE.Mesh(new THREE.BoxGeometry(hz ? t1 - t0 : d, y1 - y0, hz ? d : t1 - t0), mat);
+      const geo = new THREE.BoxGeometry(hz ? t1 - t0 : d, y1 - y0, hz ? d : t1 - t0);
+      /* A tiled or papered wall is made of several boxes round its openings; mapping in metres keeps the pattern continuous across them. */
+      if (mat.userData.metric) { const uv = geo.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, t0 + uv.getX(i) * (t1 - t0), y0 + uv.getY(i) * (y1 - y0)); }
+      const m = new THREE.Mesh(geo, mat);
       m.position.set(c[0] + n[0] * q, (y0 + y1) / 2, c[1] + n[1] * q); m.receiveShadow = true; g.add(m); return m;
     };
     /* Openings sit on the room's sides; t on a side is shifted to t along this segment. */
@@ -127,7 +130,7 @@ const Scene3D = (function () {
     const white = M(0xfbfaf7, 0.8), wm = M(S.wall, 1), base = floorTexture(style);
     plans.forEach(pl => {
       const r = pl.r, o = pl.room, g = new THREE.Group(); g.position.set(o.x, 0, o.y);
-      const fin = pl.lines.find(l => l.area);
+      const fin = pl.lines.find(l => l.area && !l.wall);
       let fmat;
       if (fin) {
         const tile = fin.cat === 'tile', tex = (tile ? tileTexture(fin.item.c1) : base).clone(); tex.needsUpdate = true;
@@ -139,7 +142,12 @@ const Scene3D = (function () {
       const fl = outlineMesh(o, fmat, false); fl.receiveShadow = true; fl.userData.floor = true; g.add(fl); floors.push(fl);
       g.add(outlineMesh(o, M(0xf7f6f3, 1), true));
       const wmr = /^#[0-9a-f]{6}$/i.test(o.wallColor || '') ? M(parseInt(o.wallColor.slice(1), 16), 1) : wm;
-      wallSegments(r).forEach(seg => g.add(buildWall(r, o, seg, wmr, white, S)));
+      /* Wall tile or wallpaper, on every wall or on the accent wall only. */
+      const wf = pl.lines.find(l => l.wall); let wfm = null;
+      if (wf) { const it = wf.item, tiled = wf.cat === 'walltile', tex = (tiled ? tileTexture(it.c1) : wallpaperTexture(it.c1)).clone(); tex.needsUpdate = true; texes.push(tex);
+        if (tiled) tex.repeat.set(1 / (4 * (it.tl > 0.04 ? it.tl : 0.6)), 1 / (4 * (it.tw > 0.04 ? it.tw : 0.3)));
+        wfm = new THREE.MeshStandardMaterial({ map: tex, roughness: tiled ? 0.35 : 0.95 }); wfm.userData.metric = true; }
+      wallSegments(r).forEach(seg => g.add(buildWall(r, o, seg, wfm && (wf.wall === 'all' || wf.wall === seg.side) ? wfm : wmr, white, S)));
       T.roomG.add(g);
       const byCat = {}; pl.lines.forEach(l => byCat[l.cat] = l.item);
       /* what gets a size label: each kind of furniture once, the door, the window and every wall */

@@ -58,7 +58,9 @@ test('a search hit and its detail answer become a feed row the planner imports',
   for (const f of ['catalog.js', 'stores.js', 'layout.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'app', 'js', f), 'utf8'), ctx, { filename: f });
   ctx.__feed = JSON.stringify({ products: [row, rowFrom({ product_id: 'W1', title: 'Peel and Stick Wallpaper 20.5 in. x 18 ft.', price: 40 }, null, 'wallpaper')] });
   const r = vm.runInContext('Stores.importFeed("homedepot", __feed)', ctx);
-  assert.strictEqual(r.added, 1, 'flooring goes in; wallpaper waits until walls take finishes');
+  assert.strictEqual(r.added, 2, 'flooring and wallpaper both go in');
+  const paper = vm.runInContext('BYID["s:homedepot:W1"]', ctx);
+  assert.ok(paper.cat === 'wallpaper' && Math.abs(paper.price - 40 / 30.75 * 10.7639) < 0.02, 'a roll price becomes a price per square metre');
   const it = vm.runInContext('BYID["s:homedepot:1001234567"]', ctx);
   assert.ok(Math.abs(it.tw - 0.18) < 0.001 && Math.abs(it.tl - 1.2192) < 0.001 && Math.abs(it.cover - 2.193) < 0.001);
   assert.ok(Math.abs(it.price - 54.9 / 23.6 * 10.7639) < 0.02);

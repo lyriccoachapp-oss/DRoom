@@ -72,6 +72,9 @@ const CATS = {
   /* finishes, priced per square metre of floor (10% waste added to the quantity) */
   floor: { name: 'Plank flooring', base: 38, area: true, sizes: [[0, 0, 0, '', 1]] },
   tile: { name: 'Floor tile', base: 46, area: true, sizes: [[0, 0, 0, '', 1]] },
+  /* wall finishes, priced per square metre of wall; a room gets one when it is chosen in the room panel */
+  walltile: { name: 'Wall tile', base: 52, area: true, wall: true, sizes: [[0, 0, 0, '', 1]] },
+  wallpaper: { name: 'Wallpaper', base: 16, area: true, wall: true, sizes: [[0, 0, 0, '', 1]] },
   /* wall paint, priced per gallon; a gallon covers about 37 m\u00b2 (400 ft\u00b2) per coat, two coats */
   paint: { name: 'Wall paint', base: 38, unit: 'gal', sizes: [[0, 0, 0, '', 1]] }
 };
@@ -94,7 +97,7 @@ const idOf = (cat, style, tier, si) => cat + '-' + style + '-' + tier + '-' + si
 const SOFT = ['sofa', 'armchair', 'rug', 'bed', 'dchair', 'ochair'];
 function paletteOf(cat, style, tier, color) {
   const S = STYLES[style], C = CATS[cat], soft = SOFT.includes(cat), o = { c1: cat === 'rug' ? S.rug[tier] : S.fabric[tier], c2: S.wood[tier], c3: S.metal };
-  if (C.area) o.c1 = parseInt(S.floor[tier].slice(1), 16);
+  if (C.area) o.c1 = C.wall ? (cat === 'walltile' ? [0xf4f4f1, 0xdde3e6, 0xb6c3c8][tier] : S.rug[tier]) : parseInt(S.floor[tier].slice(1), 16);
   if (color != null) { if (soft || C.area) o.c1 = color; else o.c2 = color; }
   o.swatch = C.area ? o.c1 : (cat === 'toilet' || cat === 'tub' || cat === 'shower') ? CERAMIC : (cat === 'fridge' || cat === 'range') ? STEEL : soft ? o.c1 : (cat === 'plant' ? 0x4f7f4a : (cat === 'lamp' ? o.c3 : o.c2));
   return o;

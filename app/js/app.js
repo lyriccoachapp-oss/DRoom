@@ -98,6 +98,7 @@
       ci.addEventListener('change', e => { r.wallColor = e.target.value.toUpperCase(); update(); });
       if (cur && !PAINTS.some(p => p[1] === cur)) lab.style.boxShadow = '0 0 0 2px var(--panel), 0 0 0 4px var(--accent)';
       lab.appendChild(ci); pb.appendChild(lab);
+      $('#selWallFin').value = CATS[r.wallFinish] && CATS[r.wallFinish].wall ? r.wallFinish : ''; $('#selWallOn').value = WALLS[r.wallFinishOn] ? r.wallFinishOn : 'all'; $('#selWallOn').hidden = !$('#selWallFin').value;
       const dd = doorOf(r), ws = $('#selDoorW');
       $('#selDoor').value = dd.type;
       Array.from(ws.options).forEach(op => { const v = parseFloat(op.value); op.textContent = UNITS.v === 'm' ? Math.round(v * 100) + ' cm' : Math.round(v / 0.0254) + ' in'; });
@@ -222,8 +223,14 @@
     }
     const shown = new Set(), list = CATALOG.filter(a => a.cat === l.cat).sort((a, b) => (a.id === it.id ? 0 : 1) - (b.id === it.id ? 0 : 1) || (a.style === state.style ? 0 : 1) - (b.style === state.style ? 0 : 1) || a.price - b.price)
       .filter(a => !a.group || (!shown.has(a.group) && shown.add(a.group))).sort((a, b) => (a.style === state.style ? 0 : 1) - (b.style === state.style ? 0 : 1) || a.price - b.price);
+    /* A long list gets a filter: words are matched against the name, colour, size and store. */
+    if (list.length > 10) {
+      const f = el('input', 'altfilter'); f.type = 'search'; f.placeholder = 'Filter ' + list.length + ' options: name, colour, size, store'; f.setAttribute('aria-label', 'Filter the options'); f.value = altFilter[l.cat] || '';
+      const run = () => { const words = f.value.toLowerCase().split(/\s+/).filter(Boolean); altFilter[l.cat] = f.value; alts.querySelectorAll('.alt').forEach(b => { b.hidden = !words.every(w => b.dataset.text.includes(w)); }); };
+      f.addEventListener('input', run); body.appendChild(f); setTimeout(run, 0);
+    }
     list.forEach(a => {
-      const b = el('button', 'alt'); b.type = 'button';
+      const b = el('button', 'alt'); b.type = 'button'; b.dataset.text = (a.name + ' ' + (a.variant || '') + ' ' + itemTag(a) + ' ' + fmtDims(a)).toLowerCase();
       const ok = a.si === it.si || (fit[a.si] !== undefined ? fit[a.si] : (fit[a.si] = canFit(p, l.cat, a.si)));
       const s2 = el('span', 'sw'); s2.style.background = hex(a.swatch);
       const m2 = el('span'); m2.append(el('div', 'nm', a.name), el('div', 'meta num', ok ? itemTag(a) + ' · ' + fmtDims(a) : 'does not fit'));
@@ -270,6 +277,7 @@
     if (skipHistory !== true) record();
   }
 
+  const altFilter = {};
   /* ---------- stores ---------- */
   let storeTarget = null, storeMsg = '';
   function renderStores() {
@@ -324,6 +332,8 @@
   document.addEventListener('visibilitychange', () => { if (document.hidden) keepPose(); });
   $('#inBudget').addEventListener('input', e => { state.budget = parseInt(e.target.value, 10); update(); });
   $('#inName').addEventListener('input', e => { const r = room(); if (r) { r.name = e.target.value.trim() || ROOMS[r.type].name; update(); } });
+  $('#selWallFin').addEventListener('change', e => { const r = room(); if (r) { if (e.target.value) r.wallFinish = e.target.value; else { delete r.wallFinish; delete r.wallFinishOn; } update(); } });
+  $('#selWallOn').addEventListener('change', e => { const r = room(); if (r) { if (e.target.value === 'all') delete r.wallFinishOn; else r.wallFinishOn = e.target.value; update(); } });
   $('#selDoor').addEventListener('change', e => { const r = room(); if (r) { r.doorType = e.target.value; update(); } });
   $('#selDoorW').addEventListener('change', e => { const r = room(); if (r) { r.doorWidth = parseFloat(e.target.value); update(); } });
   $('#btnDoorSide').addEventListener('click', () => { const r = room(); if (r) { r.doorSide = doorOf(r).side === 'left' ? 'right' : 'left'; update(); } });

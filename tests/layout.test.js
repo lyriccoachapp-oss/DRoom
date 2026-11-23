@@ -301,3 +301,21 @@ test('an L-shaped sofa chosen by hand is laid out with its deep end, and nothing
   const auto = plan('living', 8, 6, 'S', 'N', 1e6);
   assert.ok(auto.lines.find(l => l.cat === 'sofa').item.si <= 2, 'left alone, the planner still picks a plain sofa');
 });
+
+test('a wall finish adds tile or wallpaper for every wall or for one accent wall', () => {
+  const base = { id: 'x', name: 'Bath', type: 'bathroom', x: 0, y: 0, W: 3, D: 2.4, doorWall: 'S', doorPos: 0.3, winWall: 'N', winPos: 0.5, overrides: {}, removed: [] };
+  const go = extra => { ctx.__room = Object.assign({}, base, { overrides: {}, removed: [] }, extra); return run('planRoom(__room, "scandi", 1e6)'); };
+  assert.ok(!go({}).lines.some(l => l.wall), 'no finish unless one is chosen');
+  const all = go({ wallFinish: 'walltile' }), line = all.lines.find(l => l.cat === 'walltile');
+  const wall = 2 * (3 + 2.4) * 2.7 - all.r.door.width * 2.05 - 1.4 * 1.3;
+  assert.strictEqual(line.wall, 'all');
+  assert.ok(Math.abs(line.qty - Math.ceil(wall * 1.1 * 10) / 10) < 1e-9, 'all walls less the door and window, plus ten percent');
+  assert.ok(all.lines.some(l => l.cat === 'tile' && !l.wall), 'the floor tile is still there');
+  assert.ok(Math.abs(all.total - all.lines.reduce((s, l) => s + l.item.price * l.qty, 0)) < 1e-6);
+  const n = go({ wallFinish: 'wallpaper', wallFinishOn: 'N' }).lines.find(l => l.cat === 'wallpaper');
+  assert.strictEqual(n.wall, 'N');
+  assert.ok(Math.abs(n.qty - Math.ceil((3 * 2.7 - 1.4 * 1.3) * 1.1 * 10) / 10) < 1e-9, 'the accent wall less its window');
+  const w = go({ wallFinish: 'wallpaper', wallFinishOn: 'W' }).lines.find(l => l.cat === 'wallpaper');
+  assert.ok(Math.abs(w.qty - Math.ceil(2.4 * 2.7 * 1.1 * 10) / 10) < 1e-9);
+  assert.ok(!go({ wallFinish: 'sofa' }).lines.some(l => l.wall), 'only wall finishes count');
+});

@@ -73,7 +73,8 @@ const Stores = (function () {
   /* ---------- mapping onto the planner ---------- */
   /* First match wins, so the specific phrases come before the general ones. */
   const KEYWORDS = [
-    [/wall ?paper|wall ?tiles?|backsplash|wall ?covering|toilet (seat|paper|brush)|range hood|bed(ding| sheet| linen| skirt)|shower (curtain|head|rod)|bath mat|lamp shade|table lamp|desk lamp/, null],
+    [/wall ?paper|wall ?covering|wall mural/, 'wallpaper'], [/wall ?tiles?|backsplash|subway tile/, 'walltile'],
+    [/toilet (seat|paper|brush)|range hood|bed(ding| sheet| linen| skirt)|shower (curtain|head|rod)|bath mat|lamp shade|table lamp|desk lamp/, null],
     [/night ?stand|bedside/, 'nightstand'], [/tv (stand|bench|unit|console)|media (console|unit|stand)/, 'tvstand'],
     [/coffee table/, 'coffee'], [/dining table|kitchen table/, 'dtable'], [/dining chair|kitchen chair/, 'dchair'],
     [/office chair|desk chair|swivel chair|task chair/, 'ochair'], [/kitchen island/, 'island'], [/\bdesks?\b/, 'desk'],
@@ -125,7 +126,7 @@ const Stores = (function () {
     if (C.area) {
       /* Flooring and tile are priced per square metre; feeds quote a square foot or a box. */
       const per = num(get('perSqft')), cov = num(get('coverage')), pu = String(get('priceUnit')).toLowerCase();
-      let m2 = /box|case|carton/.test(pu) && cov > 0 && price > 0 ? price / cov * 10.7639 : per > 0 ? per * 10.7639 : /m2|m²|sq\.? ?m/.test(pu) ? price : /sq\.? ?ft|sqft|ft2|square f/.test(pu) ? price * 10.7639 : cov > 0 && price > 0 ? price / cov * 10.7639 : NaN;
+      let m2 = /box|case|carton|roll/.test(pu) && cov > 0 && price > 0 ? price / cov * 10.7639 : per > 0 ? per * 10.7639 : /m2|m²|sq\.? ?m/.test(pu) ? price : /sq\.? ?ft|sqft|ft2|square f/.test(pu) ? price * 10.7639 : cov > 0 && price > 0 ? price / cov * 10.7639 : NaN;
       if (!(m2 > 0)) return { skip: 'no price per sq ft or coverage per box' };
       Object.assign(it, { price: Math.round(m2 * 100) / 100, si: 0, w: 0, d: 0, h: 0 });
       /* Size of one tile or plank and the floor one box covers, when the feed has them. */
