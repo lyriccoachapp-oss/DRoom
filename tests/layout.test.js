@@ -283,3 +283,21 @@ test('a neighbouring room\'s door keeps the floor clear on this side too', () =>
     assert.ok(!run('planRoom(__rooms[1], "scandi", 1e6, [], __rooms)').r.keepClear.some(z => z.foreign), 'the living room door opens onto the hall side, not the kitchen');
   }
 });
+
+test('an L-shaped sofa chosen by hand is laid out with its deep end, and nothing overlaps it', () => {
+  let withPart = 0, coffee = 0;
+  for (const si of [3, 5, 6, 7, 8]) for (const W of [4.2, 5, 6, 8]) for (const D of [3.6, 4.2, 5, 6]) for (const dw of walls) {
+    ctx.__room = { id: 'x', name: 'Living', type: 'living', x: 0, y: 0, W, D, doorWall: dw, doorPos: 0.3, winWall: 'N', winPos: 0.6, overrides: { sofa: 'sofa-scandi-0-' + si }, removed: [] };
+    const p = run('planRoom(__room, "scandi", 1e6)');
+    const solid = p.placed.filter(q => !q.flat), parts = p.placed.filter(q => q.part);
+    for (const q of p.placed) assert.ok(q.cx - q.hx >= -1e-3 && q.cz - q.hz >= -1e-3 && q.cx + q.hx <= W + 1e-3 && q.cz + q.hz <= D + 1e-3, `sofa size ${si} in ${W}x${D}: ${q.cat} is outside the room`);
+    for (let i = 0; i < solid.length; i++) { assert.ok(!overlaps(solid[i], p.r.doorRect), `${solid[i].cat} blocks the door`); for (let j = i + 1; j < solid.length; j++) assert.ok(!overlaps(solid[i], solid[j]), `sofa size ${si} in ${W}x${D} door ${dw}: ${solid[i].cat} overlaps ${solid[j].cat}`); }
+    const line = p.lines.find(l => l.cat === 'sofa');
+    assert.strictEqual(line.qty, 1, 'the deep end is part of the sofa, not a second one');
+    if (line.item.si === si && si >= 5) { assert.strictEqual(parts.length, 1); withPart++; if (p.placed.some(q => q.cat === 'coffee')) coffee++; }
+    else assert.strictEqual(parts.length, 0);
+  }
+  assert.ok(withPart > 60 && coffee > withPart * 0.6, `L sofas placed ${withPart}, with a coffee table ${coffee}`);
+  const auto = plan('living', 8, 6, 'S', 'N', 1e6);
+  assert.ok(auto.lines.find(l => l.cat === 'sofa').item.si <= 2, 'left alone, the planner still picks a plain sofa');
+});

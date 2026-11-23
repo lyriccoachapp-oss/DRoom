@@ -73,7 +73,7 @@ const PlanEditor = (function () {
       el('path', { d: 'M ' + roomPolygon(o).map(p => ((o.x + p[0]) * S) + ' ' + ((o.y + p[1]) * S)).join(' L ') + ' Z', class: 'room', 'data-act': 'move', 'data-room': o.id }, g);
       /* Floor kept free in front of doors and drawers, and where a neighbouring room's door opens onto this one. */
       if (pl) pl.placed.filter(q => q.clear && (q.cat === 'wardrobe' || q.cat === 'dresser' || q.cat === 'fridge' || q.cat === 'range')).map(q => q.clear).concat(pl.r.keepClear.filter(z => z.foreign)).forEach(z => el('rect', { x: (o.x + z.cx - z.hx) * S, y: (o.y + z.cz - z.hz) * S, width: z.hx * 2 * S, height: z.hz * 2 * S, class: 'clr' }, g));
-      if (pl) pl.placed.filter(q => q.cat !== 'uppers').forEach(q => el('rect', { x: (o.x + q.cx - q.hx) * S, y: (o.y + q.cz - q.hz) * S, width: q.hx * 2 * S, height: q.hz * 2 * S, rx: 6, class: 'furn' + (q.flat ? ' rug' : '') + (st.sel && st.sel.roomId === o.id && st.sel.cat === q.cat ? ' sel' : '') }, g));
+      if (pl) pl.placed.filter(q => q.cat !== 'uppers').sort((a, b) => (b.flat ? 1 : 0) - (a.flat ? 1 : 0)).forEach(q => el('rect', { x: (o.x + q.cx - q.hx) * S, y: (o.y + q.cz - q.hz) * S, width: q.hx * 2 * S, height: q.hz * 2 * S, rx: 6, class: 'furn' + (q.flat ? ' rug' : '') + (st.sel && st.sel.roomId === o.id && st.sel.cat === q.cat ? ' sel' : '') }, g));
       if (pl) {
         const d = opening(o, pl.r, pl.r.door.wall, pl.r.door.t, pl.r.door.width + 0.04), w = opening(o, pl.r, pl.r.win.wall, pl.r.win.t, 1.4);
         el('line', { x1: d.x1, y1: d.y1, x2: d.x2, y2: d.y2, class: 'door' }, g);

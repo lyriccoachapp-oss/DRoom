@@ -52,6 +52,7 @@ const Stores = (function () {
     tw: ['tilewidth', 'plankwidth', 'piecewidth'], tl: ['tilelength', 'planklength', 'piecelength'],
     dims: ['dimensions', 'size', 'productdimensions'], unit: ['unit', 'dimunit', 'dimensionunit', 'units', 'sizeunit'],
     url: ['url', 'link', 'producturl', 'productlink', 'buyurl', 'deeplink'], image: ['image', 'imageurl', 'imagelink', 'thumbnail'],
+    shape: ['shape'], deep: ['deepside', 'chaisedepth', 'deepsidedepth'],
     color: ['color', 'colour', 'finish'], style: ['style'], priceUnit: ['priceunit', 'soldby', 'unitofmeasure', 'uom'],
     coverage: ['coverage', 'coveragesqft', 'sqftperbox', 'sqftpercase', 'coverageperbox'], perSqft: ['pricepersqft', 'pricesqft', 'persqft']
   };
@@ -62,7 +63,7 @@ const Stores = (function () {
     for (const a of ALIAS[name]) for (const k of keys) {
       const n = norm(k); if (row[k] === '' || row[k] == null) continue;
       if (n === a) return { v: row[k], unit: null };
-      if (name === 'w' || name === 'd' || name === 'h' || name === 'tw' || name === 'tl') for (const u of ['inches', 'inch', 'in', 'cm', 'mm', 'ft', 'm']) if (n === a + u) return { v: row[k], unit: u };
+      if (name === 'w' || name === 'd' || name === 'h' || name === 'tw' || name === 'tl' || name === 'deep') for (const u of ['inches', 'inch', 'in', 'cm', 'mm', 'ft', 'm']) if (n === a + u) return { v: row[k], unit: u };
     }
     return null;
   }
@@ -91,8 +92,11 @@ const Stores = (function () {
     return null;
   }
   /* The smallest layout size the product fits inside, so a real product never takes more room than the plan gave it. */
-  function slotOf(cat, w, d) {
-    const sizes = CATS[cat].sizes, fits = (a, b) => sizes.findIndex(s => a <= s[0] * 1.03 + 0.02 && b <= s[1] * 1.03 + 0.02);
+  function slotOf(cat, w, d, shape, deep) {
+    const sizes = CATS[cat].sizes;
+    /* An L-shaped sofa takes an L-shaped slot: long side, depth of the seat run, and how far the deep end reaches. */
+    if (shape && deep > 0) { const si = sizes.findIndex(s => s[5] && s[5].cw && (shape === 'corner') === (s[5].cd > 2.2) && w <= s[0] * 1.03 + 0.02 && deep <= s[5].cd * 1.03 + 0.02); return si >= 0 ? { si, w, d: Math.min(d, sizes[si][1]), ext: { cw: sizes[si][5].cw, cd: deep } } : null; }
+    const fits = (a, b) => sizes.findIndex(s => !(s[5] && s[5].cw) && a <= s[0] * 1.03 + 0.02 && b <= s[1] * 1.03 + 0.02);
     let si = fits(w, d); if (si >= 0) return { si, w, d };
     si = fits(d, w); return si >= 0 ? { si, w: d, d: w } : null;
   }
@@ -139,13 +143,17 @@ const Stores = (function () {
         else { const s = String(get('dims')), m = s.match(/\d+(\.\d+)?/g); if (m && m.length >= 2) { w = +m[0]; d = +m[1]; h = m[2] ? +m[2] : NaN; unit = unit || unitOf(s); } }
         if (!(w > 0 && d > 0)) return { skip: 'no width and depth' };
         const k = UNIT_M[unit || store.dimUnit] || (Math.max(w, d) > 400 ? 0.001 : Math.max(w, d) > 12 ? (store.dimUnit === 'in' ? 0.0254 : 0.01) : 1);
-        const slot = slotOf(cat, w * k, d * k);
+        const fs = field(row, 'deep'), shp = /corner|chaise/.exec(String(get('shape')).toLowerCase());
+        const slot = slotOf(cat, w * k, d * k, cat === 'sofa' && shp ? shp[0] : null, fs ? num(fs.v) * (UNIT_M[fs.unit] || k) : 0);
         if (!slot) return { skip: 'larger than the sizes the planner lays out' };
         Object.assign(it, { si: slot.si, w: slot.w, d: slot.d, h: h > 0 ? clamp(h * k, 0.01, 2.6) : C.sizes[slot.si][2] });
+        if (slot.ext) it.ext = slot.ext;
       }
     }
     it.tier = tierOf(cat, it.si, it.price);
     const sw = String(get('style')).toLowerCase(), st = STYLE_WORDS.find(x => x[0].test(sw));
+    /* Colours of one model at one size are variants of a single product. */
+    const cut = name.split(' - '); if (cut.length > 1) { it.group = store.id + ':' + cut[0].toLowerCase() + '|' + Math.round(it.w * 100) + 'x' + Math.round(it.d * 100) + (it.ext ? 'L' : ''); it.variant = cut.slice(1).join(' - ').replace(/\s+\d+x\d+.*$/, '').slice(0, 40); }
     it.style = st ? st[1] : 'scandi'; it.anyStyle = !st; it.color = colorOf(get('color')) != null ? colorOf(get('color')) : colorOf(name);
     return { item: Object.assign(it, paletteOf(cat, it.style, it.tier, it.color)) };
   }
@@ -191,6 +199,8 @@ const Stores = (function () {
     const top = Math.max.apply(null, c.map(p => p.si)); c = c.filter(p => p.si === top);
     const m = c.filter(p => p.anyStyle || p.style === style); if (m.length) c = m;
     c.sort((a, b) => a.price - b.price || (a.id < b.id ? -1 : 1));
+    /* one entry per model, so twenty colours of one sofa do not crowd out the others */
+    const seen = new Set(); c = c.filter(p => !p.group || (!seen.has(p.group) && seen.add(p.group)));
     return c[Math.round(tier * (c.length - 1) / 2)];
   }
   /* A product with no style of its own is drawn in the style of the home. */

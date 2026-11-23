@@ -89,3 +89,31 @@ test('feeds survive a save and load, and a link falls back to a store search', (
   assert.strictEqual(run('Stores.linkOf(CATALOG[0])'), null);
   run('Stores.reset()');
 });
+
+test('L-shaped sofas take an L-shaped size, and colours of one model count as one product', () => {
+  run('Stores.reset()');
+  const feed = { products: [
+    { sku: 'C1', name: 'EXAMPEL Sectional, 4-seat corner - grey', droom_category: 'sofa', price: 1299, width_cm: 252, depth_cm: 92, shape: 'corner', deep_side_cm: 252 },
+    { sku: 'H1', name: 'EXAMPEL Sofa with chaise - beige', droom_category: 'sofa', price: 1499, width_cm: 252, depth_cm: 98, shape: 'chaise', deep_side_cm: 164 },
+    { sku: 'W1', name: 'EXAMPEL Sofa - beige', droom_category: 'sofa', price: 1699, width_cm: 312, depth_cm: 98 },
+    { sku: 'S1', name: 'TESTA Sofa - grey', droom_category: 'sofa', price: 700, width_cm: 224, depth_cm: 90 },
+    { sku: 'S2', name: 'TESTA Sofa - green', droom_category: 'sofa', price: 720, width_cm: 224, depth_cm: 90 },
+    { sku: 'S3', name: 'TESTA Sofa - brown', droom_category: 'sofa', price: 740, width_cm: 224, depth_cm: 90 },
+    { sku: 'S4', name: 'ANNAN Sofa - blue', droom_category: 'sofa', price: 900, width_cm: 230, depth_cm: 92 }] };
+  const r = call('Stores.importFeed("ikea", __a)', JSON.stringify(feed));
+  assert.strictEqual(r.added, 7);
+  const it = id => run('BYID["s:ikea:' + id + '"]');
+  assert.deepStrictEqual([it('C1').si, it('H1').si, it('W1').si], [7, 5, 4]);
+  assert.ok(Math.abs(it('C1').ext.cd - 2.52) < 1e-9 && Math.abs(it('H1').ext.cd - 1.64) < 1e-9 && !it('W1').ext);
+  assert.strictEqual(it('S1').group, it('S2').group);
+  assert.strictEqual(it('S2').variant, 'green');
+  assert.notStrictEqual(it('S1').group, it('S4').group);
+  /* with a big budget the dearest model wins, not the dearest colour of the cheapest model */
+  assert.strictEqual(run('Stores.pick("sofa", "scandi", 2, 2).id'), 's:ikea:S4');
+  assert.strictEqual(run('Stores.pick("sofa", "scandi", 0, 2).id'), 's:ikea:S1');
+  const room2 = room('living'); room2.W = 6; room2.D = 5; room2.overrides.sofa = 's:ikea:C1';
+  const p = call('planRoom(__a, "scandi", 1e6)', room2);
+  assert.strictEqual(p.lines.find(l => l.cat === 'sofa').item.id, 's:ikea:C1');
+  assert.strictEqual(p.placed.filter(q => q.part).length, 1);
+  run('Stores.reset()');
+});

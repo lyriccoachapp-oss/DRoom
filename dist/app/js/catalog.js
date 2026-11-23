@@ -15,6 +15,7 @@ function fmtDims(it) {
   if (CATS[it.cat].area && it.tw) { const k = UNITS.v === 'm' ? 100 : 1 / 0.0254, r = v => Math.round(v * k * 10) / 10; return r(it.tw) + ' × ' + r(it.tl) + (UNITS.v === 'm' ? ' cm · ' + money(it.price) + ' / m²' : ' in · $' + (it.price / 10.7639).toFixed(2) + ' / ft²'); }
   if (CATS[it.cat].area) return UNITS.v === 'm' ? money(it.price) + ' / m\u00b2' : '$' + (it.price / 10.7639).toFixed(2) + ' / ft\u00b2';
   const f = UNITS.v === 'm' ? v => Math.round(v * 100) : v => Math.round(v / 0.0254), u = UNITS.v === 'm' ? ' cm' : ' in';
+  if (it.ext) return f(it.w) + ' × ' + f(it.ext.cd) + ' × ' + f(it.h) + u + ' (L-shaped)';
   return it.cat === 'rug' ? f(it.d) + ' × ' + f(it.w) + u : f(it.w) + ' × ' + f(it.d) + ' × ' + f(it.h) + u;
 }
 function fmtArea(m2) { return UNITS.v === 'm' ? m2.toFixed(1) + ' m²' : Math.round(m2 * 10.7639) + ' ft²'; }
@@ -33,7 +34,12 @@ const STYLES = {
 const TIERS = [{ name: 'budget', mult: 1 }, { name: 'standard', mult: 1.8 }, { name: 'premium', mult: 3.2 }];
 /* sizes: [width, depth, height (m), label, price multiplier] */
 const CATS = {
-  sofa: { name: 'Sofa', base: 520, sizes: [[1.6, 0.88, 0.82, '2-seat', 1], [2.0, 0.92, 0.82, '3-seat', 1.25], [2.4, 0.95, 0.82, '4-seat', 1.5]] },
+  /* A sixth entry marks a size the planner only uses when it is chosen by hand: {} for an extra-wide sofa,
+     {cw, cd} for one with a deep end (a chaise, or the second arm of a corner sofa) cw wide that reaches cd from the wall. */
+  sofa: { name: 'Sofa', base: 520, sizes: [[1.6, 0.88, 0.82, '2-seat', 1], [2.0, 0.92, 0.82, '3-seat', 1.25], [2.4, 0.95, 0.82, '4-seat', 1.5],
+    [2.8, 1.0, 0.82, 'wide', 1.7, {}], [3.2, 1.0, 0.82, 'extra wide', 1.9, {}],
+    [2.6, 1.0, 0.82, 'with chaise', 1.8, { cw: 1.0, cd: 1.7 }], [3.2, 1.0, 0.82, 'wide, with chaise', 2.1, { cw: 1.0, cd: 1.7 }],
+    [2.6, 1.0, 0.82, 'corner', 2.3, { cw: 1.0, cd: 2.6 }], [3.3, 1.0, 0.82, 'large corner', 2.7, { cw: 1.0, cd: 2.6 }]] },
   armchair: { name: 'Armchair', base: 260, sizes: [[0.8, 0.82, 0.8, '', 1]] },
   coffee: { name: 'Coffee table', base: 120, sizes: [[1.0, 0.55, 0.42, '', 1]] },
   tvstand: { name: 'TV stand', base: 210, sizes: [[1.5, 0.4, 0.5, 'medium', 1], [1.8, 0.42, 0.5, 'wide', 1.2]] },
@@ -102,6 +108,7 @@ for (const cat in CATS) {
         const raw = C.base * sz[4] * TIERS[tier].mult * S.mult, price = C.area ? Math.round(raw) : Math.round(raw / 10) * 10 - 1;
         const it = Object.assign({ id: idOf(cat, style, tier, si), cat, style, tier, si, w: sz[0], d: sz[1], h: sz[2],
           name: C.name + ' “' + S.series[tier] + '”' + (sz[3] ? ', ' + sz[3] : ''), price, supplier: S.supplier }, paletteOf(cat, style, tier));
+        if (sz[5] && sz[5].cw) it.ext = sz[5];
         CATALOG.push(it); BYID[it.id] = it;
       });
     }

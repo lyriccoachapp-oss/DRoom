@@ -51,7 +51,19 @@ function rowFromHtml(html, kind) {
   }
   if (!p || !p.name || !p.offers) return null;
   const offer = Array.isArray(p.offers) ? p.offers[0] : p.offers, price = parseFloat(offer && (offer.price != null ? offer.price : offer.lowPrice));
-  let w = cm(p.width), d = cm(p.depth), h = cm(p.height);
+  /* The measurements table names every figure ("Width right", "Depth chaise", "Min. length"); the structured data only has three. */
+  const ms = {};
+  for (const m of String(html).matchAll(/measurement-name">([^<]+)<\/span>\s*<span[^>]*measurement-value">([^<]+)</g)) { const k = m[1].trim().toLowerCase(); if (ms[k] == null && cm(m[2]) > 0) ms[k] = cm(m[2]); }
+  const mk = re => { const k = Object.keys(ms).find(x => re.test(x)); return k ? ms[k] : null; };
+  let w = cm(p.width) || mk(/^width$/) || mk(/^(min\. )?width$/), d = cm(p.depth) || mk(/^depth$/) || mk(/^(min\. )?length$/), h = cm(p.height) || mk(/^(max\. )?height$/);
+  /* Sofas that are not a plain rectangle: a corner sofa has two arms, a chaise sofa has one deep end. */
+  let shape = null, deep = null;
+  if (kind === 'sofa') {
+    const l = mk(/^width left$/), r = mk(/^width right$/), ch = mk(/depth.*chaise|chaise.*depth|^depth chaise/);
+    if (l > 0 && r > 0) { shape = 'corner'; w = Math.max(l, r); deep = Math.min(l, r); d = d || mk(/^depth/); }
+    else if (ch > 0 && w > 0 && d > 0 && ch > d + 20) { shape = 'chaise'; deep = ch; }
+    else if (w > 0 && d > 140) { shape = 'chaise'; deep = d; d = mk(/^seat depth$/) ? Math.min(d, mk(/^seat depth$/) + 40) : 95; }
+  }
   if (kind === 'rug' && !d) d = cm(p.length) || cm(p.depth);
   if (kind === 'bed' && !d) d = cm(p.length);
   /* A floor lamp page often gives only a height. Its footprint hardly varies, so a standard one is assumed and the row says so. */
@@ -64,6 +76,7 @@ function rowFromHtml(html, kind) {
     price, currency: offer.priceCurrency || undefined, width_cm: w, depth_cm: d, height_cm: h || undefined, color: parts[1] ? parts.slice(1).join(' ').slice(0, 60) : undefined,
     url: p.url || offer.url, image: img && (img.contentUrl || img.url || (typeof img === 'string' ? img : undefined)) };
   if (assumed) row.size_assumed = true;
+  if (shape) { row.shape = shape; row.deep_side_cm = deep; }
   if (model) row.model_glb = model;
   return row;
 }
