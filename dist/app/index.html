@@ -189,6 +189,7 @@ input[type=file]{max-width:100%; font-size:13px}
 .variant{display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line); background:var(--bg); border-radius:999px; padding:4px 10px; font-size:12px}
 .variant i{width:12px; height:12px; border-radius:50%; border:1px solid var(--line)}
 .variant[aria-current]{border-color:var(--accent); font-weight:700}
+.altfilter{width:100%; box-sizing:border-box; background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:6px 9px; margin:0 0 8px; font-size:12.5px}
 .storelink{display:inline-block; margin:0 0 8px; font-size:12.5px; font-weight:600; color:var(--accent)}
 .alts{display:flex; flex-direction:column; gap:4px; max-height:250px; overflow:auto}
 .alt{display:grid; grid-template-columns:18px minmax(0,1fr) auto; gap:8px; align-items:center; padding:6px 8px; border:1px solid transparent; border-radius:8px; background:var(--panel); text-align:left; width:100%}
@@ -254,6 +255,7 @@ input[type=file]{max-width:100%; font-size:13px}
         <div class="row"><label for="selType">Type</label><select id="selType"><option value="living">Living room</option><option value="bedroom">Bedroom</option><option value="kitchen">Kitchen</option><option value="bathroom">Bathroom</option><option value="dining">Dining room</option><option value="office">Office</option><option value="hall">Hallway</option></select></div>
         <div class="row"><label for="selShape">Shape</label><select id="selShape"><option value="">Rectangle</option><option value="NE">L, notch top right</option><option value="NW">L, notch top left</option><option value="SE">L, notch bottom right</option><option value="SW">L, notch bottom left</option></select></div>
         <div class="row"><label>Walls</label><div class="paints" id="paints" role="group" aria-label="Wall colour"></div></div>
+        <div class="row"><label for="selWallFin">Finish</label><select id="selWallFin" aria-label="Wall finish"><option value="">Paint only</option><option value="walltile">Wall tile</option><option value="wallpaper">Wallpaper</option></select><select id="selWallOn" aria-label="Which walls"><option value="all">All walls</option><option value="N">Top wall</option><option value="E">Right wall</option><option value="S">Bottom wall</option><option value="W">Left wall</option></select></div>
         <div class="row"><label for="selDoor">Door</label><select id="selDoor"><option value="swing">Hinged</option><option value="pocket">Pocket</option><option value="barn">Barn, sliding</option><option value="open">Open, no door</option></select></div>
         <div class="row"><label for="selDoorW">Opening</label><select id="selDoorW"><option value="0.71">28 in</option><option value="0.76">30 in</option><option value="0.81">32 in</option><option value="0.86">34 in</option><option value="0.91">36 in</option></select></div>
         <div class="btnrow" id="doorBtns"><button type="button" class="btn" id="btnDoorSide">Flip hinge side</button><button type="button" class="btn" id="btnDoorSwing">Open outward</button></div>
