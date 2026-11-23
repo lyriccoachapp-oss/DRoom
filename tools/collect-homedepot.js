@@ -84,7 +84,7 @@ async function main() {
   async function api(params) {
     const name = Object.keys(params).sort().map(k => k + '-' + String(params[k]).replace(/[^a-z0-9]+/gi, '_')).join('.') + '.json', file = path.join(cache, name);
     if (fs.existsSync(file)) return JSON.parse(fs.readFileSync(file, 'utf8'));
-    const res = await fetch('https://serpapi.com/search.json?' + new URLSearchParams(Object.assign({ api_key: key, country }, params)));
+    const res = await fetch('https://serpapi.com/search.json?' + new URLSearchParams(Object.assign({ api_key: key, country }, params)), { signal: AbortSignal.timeout(60000) });
     spent++;
     if (!res.ok) throw new Error('SerpApi ' + res.status + ' for ' + JSON.stringify(params));
     const json = await res.json(); if (json.error) throw new Error('SerpApi: ' + json.error);
@@ -109,17 +109,21 @@ async function main() {
       }
     }
   }
+  const write = () => { fs.mkdirSync(path.dirname(out), { recursive: true }); fs.writeFileSync(out, JSON.stringify({ store: 'homedepot', country, collected: new Date().toISOString().slice(0, 10), products: rows }, null, 1)); };
+  /* The feed is written before the photos, so a photo problem never costs the product data. */
+  write();
   if (imgDir) {
     fs.mkdirSync(imgDir, { recursive: true });
+    let failed = 0;
     for (const row of rows) {
+      if (failed >= 5) { console.error('Photos: 5 downloads in a row failed, skipping the rest. The feed keeps each photo link.'); break; }
       if (!row.image) continue;
       const file = path.join(imgDir, row.sku.replace(/[^a-z0-9_-]+/gi, '_') + '.jpg');
-      try { if (!fs.existsSync(file)) { const r = await fetch(row.image); if (!r.ok) throw new Error(String(r.status)); fs.writeFileSync(file, Buffer.from(await r.arrayBuffer())); await sleep(150); } row.image_file = path.relative(path.dirname(out), file); }
-      catch (e) { console.error('photo ' + row.sku + ': ' + e.message); }
+      try { if (!fs.existsSync(file)) { const r = await fetch(row.image, { signal: AbortSignal.timeout(15000) }); if (!r.ok) throw new Error(String(r.status)); fs.writeFileSync(file, Buffer.from(await r.arrayBuffer())); await sleep(150); } row.image_file = path.relative(path.dirname(out), file); failed = 0; }
+      catch (e) { failed++; console.error('photo ' + row.sku + ': ' + e.message); }
     }
   }
-  fs.mkdirSync(path.dirname(out), { recursive: true });
-  fs.writeFileSync(out, JSON.stringify({ store: 'homedepot', country, collected: new Date().toISOString().slice(0, 10), products: rows }, null, 1));
+  write();
   console.log('Wrote ' + rows.length + ' products to ' + out + ' (' + spent + ' new SerpApi requests).');
   for (const k in stats) console.log('  ' + k + ': kept ' + stats[k].kept + ', without a size ' + stats[k].noSize + ', not a finishing material ' + stats[k].skipped);
 }

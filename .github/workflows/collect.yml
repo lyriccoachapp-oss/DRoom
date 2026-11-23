@@ -18,6 +18,10 @@ on:
       pages:
         description: Result pages per search
         default: '2'
+      photos:
+        description: Download photos (the feed keeps photo links either way)
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -36,12 +40,15 @@ jobs:
           KINDS: ${{ inputs.kinds }}
           LIMIT: ${{ inputs.limit }}
           PAGES: ${{ inputs.pages }}
+          PHOTOS: ${{ inputs.photos }}
         run: |
           if [ -z "$SERPAPI_KEY" ]; then echo "The repository secret SERPAPI_KEY is not set."; exit 1; fi
+          IMG=""; if [ "$PHOTOS" = "true" ]; then IMG="--images catalog/img/homedepot-$COUNTRY"; fi
           node tools/collect-homedepot.js --country "$COUNTRY" --kinds "$KINDS" --limit "$LIMIT" --pages "$PAGES" \
-            --images "catalog/img/homedepot-$COUNTRY" --out "catalog/homedepot-$COUNTRY.json" | tee catalog-summary.txt
+            $IMG --out "catalog/homedepot-$COUNTRY.json" 2>&1 | tee catalog-summary.txt
           cat catalog-summary.txt >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: homedepot-${{ inputs.country }}
           path: |
@@ -49,3 +56,4 @@ jobs:
             catalog/img
             catalog-summary.txt
           retention-days: 3
+          if-no-files-found: warn
