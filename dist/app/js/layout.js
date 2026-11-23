@@ -127,7 +127,8 @@ function runLayout(r,want,forced){
   let tight=false; /* set while a piece the room cannot do without is squeezed into a room too small to keep every front clear */
   const clearOk=c=>!c||placed.every(p=>p.flat||!overlap(c,p));
   const add=(cat,si,rect,extra)=>{const sz=CATS[cat].sizes[si];const p=Object.assign({cat,si,w:sz[0],d:sz[1],h:sz[2]},rect,extra||{});if(!NEEDS_FRONT[cat])delete p.clear;placed.push(p);return p;};
-  const sizes=cat=>forced[cat]!=null?[forced[cat]]:CATS[cat].sizes.map((_,i)=>i).reverse();
+  /* Sizes marked for hand picking (extra-wide and L-shaped sofas) are only laid out when asked for. */
+  const sizes=cat=>forced[cat]!=null?[forced[cat]]:CATS[cat].sizes.map((_,i)=>i).filter(i=>!CATS[cat].sizes[i][5]).reverse();
   const dims=(cat,si)=>CATS[cat].sizes[si];
   function onWall(w,iw,id,h,pref,gap,front){
     const len=wallLen(r,w),ts=[];
@@ -169,16 +170,23 @@ function runLayout(r,want,forced){
     const order=all.slice().sort((a,b)=>score(b)-score(a));
     let tvWall=order[0],pick=null;
     for(const tw of order){const s2=OPP[tw];
-      for(const si of sizes('sofa')){const sz=dims('sofa',si);const rect=onWall(s2,sz[0],sz[1],sz[2],mid(s2),Math.max(0.04,acrossOf(r,s2)-4.4));if(rect){pick={si,rect};break;}}
+      for(const si of sizes('sofa')){const sz=dims('sofa',si);const rect=onWall(s2,sz[0],sz[1],sz[2],mid(s2),Math.max(0.04,acrossOf(r,s2)-4.4));if(!rect)continue;
+        /* The deep end of an L-shaped sofa goes on the side away from the door, if the floor there is free. */
+        let part=null;
+        if(sz[5]&&sz[5].cw){const e=sz[5],far=doorT(s2)===0?-1:1;
+          for(const sg of [far,-far]){const q=at(r,s2,rect.t+sg*(sz[0]/2-e.cw/2),rect.gap+sz[1]+(e.cd-sz[1])/2,e.cw,e.cd-sz[1]);if(fits(q,0.5)){part=Object.assign(q,{sg,w:e.cw,d:e.cd-sz[1]});break;}}
+          if(!part)continue;}
+        pick={si,rect,part};break;}
       if(pick){tvWall=tw;break;}}
     const sw=OPP[tvWall],len=wallLen(r,sw),ac=acrossOf(r,sw);
     let sofa=pick?add('sofa',pick.si,pick.rect):null;
+    const part=pick&&pick.part;if(part)placed.push(Object.assign({cat:'sofa',si:pick.si,part:true,h:0.45},part));
     if(want.has('tvstand'))for(const si of sizes('tvstand')){const sz=dims('tvstand',si);const rect=onWall(tvWall,sz[0],sz[1],sz[2],sofa?sofa.t:mid(tvWall),0.02);if(rect){add('tvstand',si,rect);break;}}
     if(sofa){
       const front=sofa.gap+sofa.d; let coffee=null;
       /* Coffee table in front of the sofa: centred first, then nudged along the sofa or a little farther out to clear a door swing. */
       if(want.has('coffee')){const si=sizes('coffee')[0],sz=dims('coffee',si);
-        search:for(const dO of [0.4,0.5,0.6])for(const dt of [0,-0.15,0.15,-0.3,0.3]){const o=front+dO+sz[1]/2,rect=at(r,sw,sofa.t+dt,o,sz[0],sz[1]);
+        search:for(const dO of [0.4,0.5,0.6])for(const dt of (part?[-part.sg*0.5,-part.sg*0.35,-part.sg*0.65]:[0,-0.15,0.15,-0.3,0.3])){const o=front+dO+sz[1]/2,rect=at(r,sw,sofa.t+dt,o,sz[0],sz[1]);
           if(ac-(o+sz[1]/2)-0.45>=0.5&&fits(rect,sz[2])){coffee=add('coffee',si,rect);break search;}}}
       if(want.has('rug')){const space=ac-front-0.45;
         for(const si of sizes('rug')){const sz=dims('rug',si);
@@ -300,7 +308,7 @@ function planRoom(room,style,budget,notes,others){
   const excluded=[];
   spec.all.forEach(c=>{if(room.removed.includes(c))excluded.push({cat:c,reason:'removed'});else if(!has(c)&&!(c==='shower'&&has('tub')))excluded.push({cat:c,reason:'space'});});
   let active=spec.all.filter(c=>has(c)&&!room.removed.includes(c));
-  const qty=c=>CATS[c].unit?paintGallons(r):CATS[c].area?area:placed.filter(p=>p.cat===c).length;
+  const qty=c=>CATS[c].unit?paintGallons(r):CATS[c].area?area:placed.filter(p=>p.cat===c&&!p.part).length;
   const si=c=>CATS[c].area||CATS[c].unit?0:placed.find(p=>p.cat===c).si;
   const tier={};active.forEach(c=>tier[c]=0);
   const itemOf=c=>Stores.styled(room.overrides[c]?BYID[room.overrides[c]]:Stores.pick(c,style,tier[c],si(c)),style);

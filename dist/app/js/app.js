@@ -213,7 +213,16 @@
     const href = Stores.linkOf(it);
     if (href) { const a = el('a', 'storelink', (it.url ? 'View at ' : 'Find at ') + it.supplier); a.href = href; a.target = '_blank'; a.rel = 'noopener noreferrer'; body.appendChild(a); }
     const alts = el('div', 'alts'), fit = {};
-    CATALOG.filter(a => a.cat === l.cat).sort((a, b) => (a.style === state.style ? 0 : 1) - (b.style === state.style ? 0 : 1) || a.price - b.price).forEach(a => {
+    /* Colours of the chosen model, then one row per model. */
+    const sibs = it.group ? CATALOG.filter(a => a.group === it.group) : [];
+    if (sibs.length > 1) {
+      const vr = el('div', 'variants');
+      sibs.sort((a, b) => a.price - b.price).forEach(a => { const b = el('button', 'variant', a.variant || a.name); b.type = 'button'; const s = el('i'); s.style.background = hex(a.swatch); b.prepend(s); if (a.id === it.id) b.setAttribute('aria-current', 'true'); b.addEventListener('click', () => { r.overrides[l.cat] = a.id; update(); }); vr.appendChild(b); });
+      body.appendChild(vr);
+    }
+    const shown = new Set(), list = CATALOG.filter(a => a.cat === l.cat).sort((a, b) => (a.id === it.id ? 0 : 1) - (b.id === it.id ? 0 : 1) || (a.style === state.style ? 0 : 1) - (b.style === state.style ? 0 : 1) || a.price - b.price)
+      .filter(a => !a.group || (!shown.has(a.group) && shown.add(a.group))).sort((a, b) => (a.style === state.style ? 0 : 1) - (b.style === state.style ? 0 : 1) || a.price - b.price);
+    list.forEach(a => {
       const b = el('button', 'alt'); b.type = 'button';
       const ok = a.si === it.si || (fit[a.si] !== undefined ? fit[a.si] : (fit[a.si] = canFit(p, l.cat, a.si)));
       const s2 = el('span', 'sw'); s2.style.background = hex(a.swatch);

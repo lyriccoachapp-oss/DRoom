@@ -151,7 +151,7 @@ const Scene3D = (function () {
       wallSegments(r).forEach(sg => { const L = Math.hypot(sg.b[0] - sg.a[0], sg.b[1] - sg.a[1]); if (L < 0.6) return; dims.push({ roomId: o.id, kind: 'wall', p: [o.x + (sg.a[0] + sg.b[0]) / 2 + sg.n[0] * 0.12, 0, o.y + (sg.a[1] + sg.b[1]) / 2 + sg.n[1] * 0.12], text: fmtLen(L) }); });
       pl.placed.forEach(q => {
         const it = byCat[q.cat]; if (!it) return;
-        const fg = new THREE.Group(); BUILD[it.cat](fg, it);
+        const fg = new THREE.Group(); if (q.part) BUILD.sofaPart(fg, it, q); else BUILD[it.cat](fg, it);
         fg.position.set(o.x + q.cx, 0, o.y + q.cz); fg.rotation.y = q.rot; fg.userData = { roomId: o.id, cat: q.cat };
         T.furnG.add(fg);
       });

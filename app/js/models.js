@@ -11,7 +11,7 @@ function legs(g,w,d,h,m,t){t=t||0.045;[[1,1],[1,-1],[-1,1],[-1,-1]].forEach(s=>B
 function rnd(seed){let s=seed>>>0;return ()=>{s=(s*1664525+1013904223)>>>0;return s/4294967296;};}
 
 const BUILD={
-  sofa(g,it){const w=it.w,d=it.d,h=it.h,fab=M(it.c1,.95),fab2=M(shade(it.c1,-0.08),.95),n=it.cat==='armchair'?1:it.si+2;
+  sofa(g,it){const w=it.w,d=it.d,h=it.h,fab=M(it.c1,.95),fab2=M(shade(it.c1,-0.08),.95),n=it.cat==='armchair'?1:Math.max(2,Math.min(4,Math.round(w/0.75)));
     legs(g,w,d,0.08,M(it.c3,.5));
     B(g,w,0.26,d,fab2,0,0.08,0);B(g,w,h-0.34,0.18,fab2,0,0.34,-d/2+0.09);
     B(g,0.15,0.26,d,fab2,w/2-0.075,0.34,0);B(g,0.15,0.26,d,fab2,-w/2+0.075,0.34,0);
@@ -143,3 +143,6 @@ BUILD.desk=function(g,it){const w=it.w,d=it.d,h=it.h,top=M(it.c2,.6),side=it.sty
   for(let i=1;i<3;i++)B(g,0.36,0.008,0.006,M(shade(it.c2,-0.35),.7),w/2-0.22,0.06+(h-0.1)*i/3,d/2-0.04);};
 BUILD.ochair=function(g,it){const m=M(0x26282c,.6),f=M(it.c1,.95);
   Cy(g,0.28,0.28,0.03,m,0,0,0);Cy(g,0.03,0.03,0.4,m,0,0.03,0);B(g,0.5,0.08,0.48,f,0,0.43,0);B(g,0.46,0.5,0.06,f,0,0.52,-0.22);};
+
+/* The deep end of an L-shaped sofa: a seat with no back, drawn at the size the layout gave it. */
+BUILD.sofaPart=function(g,it,q){const fab=M(it.c1,.95),fab2=M(shade(it.c1,-0.08),.95);B(g,q.w,0.26,q.d,fab2,0,0.08,0);B(g,q.w-0.04,0.13,q.d-0.04,fab,0,0.34,0);};
