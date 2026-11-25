@@ -14,6 +14,36 @@ function at(r,w,t,o,iw,id){
 const overlap=(a,b,m)=>Math.abs(a.cx-b.cx)<a.hx+b.hx+(m||0)-1e-6&&Math.abs(a.cz-b.cz)<a.hz+b.hz+(m||0)-1e-6;
 const inRoom=(r,a)=>a.cx-a.hx>=-1e-3&&a.cz-a.hz>=-1e-3&&a.cx+a.hx<=r.W+1e-3&&a.cz+a.hz<=r.D+1e-3&&!(r.cutRect&&overlap(a,r.cutRect));
 
+/* Floors. room.floor is 0 for the ground floor, 1 for the one above and so on. STOREY.h is floor-to-floor height
+   in metres (wall height plus about 0.3 m of floor framing); the app sets it from the construction settings. */
+const STOREY = { h: 2.74 };
+const floorOf = room => Math.max(0, Math.round(Number(room && room.floor) || 0));
+/* A straight flight in a stair room (NBC 9.8.4.1. rise 125-200 mm and 9.8.4.2. run 255-355 mm for private stairs).
+   The flight runs along the room's long side, from a bottom landing at the end nearest the door, and its top riser is
+   the room's far end, where it arrives on the floor above. Lengths in metres along the room from the bottom end.
+   Returns {axis: 'x'|'z', dir: 1|-1, width, length, n (risers), rise, run, s0 (first riser), landing, need, ok}. */
+const STAIR = { riseMax: 0.2, riseMin: 0.125, runMin: 0.255, runMax: 0.355, width: 0.86, headroom: 1.95, guard: 0.9, landingMax: 1.1 };
+function stairOf(room, storey){
+  const H=storey||STOREY.h, r=roomGeom(room), alongX=room.W>=room.D, length=alongX?room.W:room.D, width=alongX?room.D:room.W;
+  const endWalls=alongX?['W','E']:['N','S'], d=r.door;
+  /* bottom end: the end wall with the door, or the end nearer to a door on a long side */
+  const bottomLow=endWalls.includes(d.wall)?d.wall===endWalls[0]:d.t<length/2;
+  const n=Math.max(1,Math.ceil(H/STAIR.riseMax-1e-9)),rise=H/n,treads=n-1;
+  /* the bottom landing is as long as the stair is wide, up to 1.1 m (9.8.6.3.), and clears a door on a long side */
+  let landing=Math.min(Math.max(width,STAIR.width),STAIR.landingMax);
+  if(!endWalls.includes(d.wall))landing=Math.max(landing,(bottomLow?d.t:length-d.t)+d.width/2+0.05);
+  const avail=length-landing;
+  let run=treads?avail/treads:0;
+  if(run>STAIR.runMax){run=STAIR.runMax;landing=length-treads*run;}
+  const s0=length-treads*run;
+  return {axis:alongX?'x':'z',dir:bottomLow?1:-1,width,length,n,rise,run,s0,landing,need:landing+treads*STAIR.runMin,ok:run>=STAIR.runMin-1e-6};
+}
+/* Room-coordinate rectangle of a stair's flight. */
+function stairFlight(room,st){
+  st=st||stairOf(room);const a=st.dir>0?st.s0:0, b=st.dir>0?st.length:st.length-st.s0;
+  return st.axis==='x'?{x0:a,x1:b,z0:0,z1:room.D}:{x0:0,x1:room.W,z0:a,z1:b};
+}
+
 /* L-shaped rooms: a room may have a rectangular notch cut from one corner, room.cut = {corner: 'NE'|'NW'|'SE'|'SW', w, d}.
    cutOf() gives the notch in room coordinates, clamped so at least 1.2 m of room remains on each side. */
 function cutOf(room){
@@ -359,6 +389,8 @@ function walkArea(plans){
   });
   /* Furniture is solid: you walk round it, with a little clearance. Rugs and wall cabinets do not block. */
   const solid=[];
+  /* a flight of stairs is climbed only in the 3D view of the floor above, so on its own floor it blocks like furniture */
+  plans.forEach(pl=>{if(pl.room.type==='stair'){const f=stairFlight(pl.room);solid.push({x0:pl.room.x+f.x0-0.05,x1:pl.room.x+f.x1+0.05,z0:pl.room.y+f.z0-0.05,z1:pl.room.y+f.z1+0.05});}});
   plans.forEach(pl=>(pl.placed||[]).forEach(q=>{if(!q.flat&&q.h>0.3)solid.push({x0:pl.room.x+q.cx-q.hx-0.12,x1:pl.room.x+q.cx+q.hx+0.12,z0:pl.room.y+q.cz-q.hz-0.12,z1:pl.room.y+q.cz+q.hz+0.12});}));
   const test=(x,z)=>zones.some(q=>x>=q.x0&&x<=q.x1&&z>=q.z0&&z<=q.z1)&&!solid.some(q=>x>q.x0&&x<q.x1&&z>q.z0&&z<q.z1);
   test.zones=zones;

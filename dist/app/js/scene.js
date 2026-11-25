@@ -1,7 +1,10 @@
 'use strict';
 /* 3D view of the whole home: dollhouse orbit, top view and eye-level walk. */
 const Scene3D = (function () {
-  const H = 2.7, keys = {};
+  const H = 2.7, FH = 3.0, keys = {};
+  /* Floors: everything up to the floor being looked at is drawn, each floor FH higher; walking happens on that floor. */
+  let floorNo = 0, shownN = 0;
+  const baseY = () => floorNo * FH;
   const cam = { theta: 0.5, phi: 0.9, radius: 12, x: 0, z: 0, yaw: 0, pitch: -0.05, key: '' };
   let T = null, canvas, stage, plans = [], view = 'orbit', sel = null, onPick = function () {};
   let walkTest = null, path = null, floors = [], lastT = 0, mini = null, hover = null, dest = null, hot = null, hotBox = null;
@@ -118,18 +121,20 @@ const Scene3D = (function () {
     });
     return moving;
   }
-  function build(p, style) {
-    plans = p;
+  function build(p, style, opts) {
+    floorNo = Math.max(0, (opts && opts.floor) || 0);
+    const shown = p.filter(pl => floorOf(pl.room) <= floorNo);
+    plans = p.filter(pl => floorOf(pl.room) === floorNo); shownN = shown.length;
     if (!T) return;
     clearGroup(T.roomG); clearGroup(T.furnG); walls = []; floors = []; dims = []; path = null; if (dest) dest.visible = false; hot = null; if (hotBox) { T.scene.remove(hotBox); hotBox = null; }
     texes.forEach(t => t.dispose()); texes = [];
-    if (!plans.length) { T.dirty = true; return; }
+    if (!shown.length) { T.dirty = true; return; }
     const S = STYLES[style];
     bb = { x0: Infinity, z0: Infinity, x1: -Infinity, z1: -Infinity };
-    plans.forEach(pl => { const o = pl.room; bb.x0 = Math.min(bb.x0, o.x); bb.z0 = Math.min(bb.z0, o.y); bb.x1 = Math.max(bb.x1, o.x + o.W); bb.z1 = Math.max(bb.z1, o.y + o.D); });
+    shown.forEach(pl => { const o = pl.room; bb.x0 = Math.min(bb.x0, o.x); bb.z0 = Math.min(bb.z0, o.y); bb.x1 = Math.max(bb.x1, o.x + o.W); bb.z1 = Math.max(bb.z1, o.y + o.D); });
     const white = M(0xfbfaf7, 0.8), wm = M(S.wall, 1), base = floorTexture(style);
-    plans.forEach(pl => {
-      const r = pl.r, o = pl.room, g = new THREE.Group(); g.position.set(o.x, 0, o.y);
+    shown.forEach(pl => {
+      const r = pl.r, o = pl.room, Y = floorOf(o) * FH, here = floorOf(o) === floorNo, g = new THREE.Group(); g.position.set(o.x, Y, o.y);
       const fin = pl.lines.find(l => l.area && !l.wall);
       let fmat;
       if (fin) {
@@ -139,7 +144,8 @@ const Scene3D = (function () {
         tex.repeat.set(real ? 1 / (4 * it.tl) : tile ? 1 / 1.6 : 1 / 2.2, real ? 1 / (4 * it.tw) : tile ? 1 / 1.6 : 1 / 2.2); texes.push(tex);
         fmat = new THREE.MeshStandardMaterial({ map: tex, roughness: tile ? 0.45 : 0.75 });
       } else fmat = M(0x9a9a98, 0.95);
-      const fl = outlineMesh(o, fmat, false); fl.receiveShadow = true; fl.userData.floor = true; g.add(fl); floors.push(fl);
+      const fl = outlineMesh(o, fmat, false); fl.receiveShadow = true; fl.userData.floor = true; g.add(fl); if (here) floors.push(fl);
+      if (o.type === 'stair') buildStair(g, o, S);
       g.add(outlineMesh(o, M(0xf7f6f3, 1), true));
       const wmr = /^#[0-9a-f]{6}$/i.test(o.wallColor || '') ? M(parseInt(o.wallColor.slice(1), 16), 1) : wm;
       /* Wall tile or wallpaper, on every wall or on the accent wall only. */
@@ -152,27 +158,56 @@ const Scene3D = (function () {
       const byCat = {}; pl.lines.forEach(l => byCat[l.cat] = l.item);
       /* what gets a size label: each kind of furniture once, the door, the window and every wall */
       const seenCat = {};
-      pl.placed.forEach(q => { const it = byCat[q.cat]; if (!it || seenCat[q.cat]) return; seenCat[q.cat] = 1; dims.push({ roomId: o.id, kind: 'item', cat: q.cat, p: [o.x + q.cx, (q.cat === 'uppers' ? 2.2 : q.h) + 0.14, o.y + q.cz], text: CATS[q.cat].name.split(' with ')[0] + ' ' + fmtDims(it) }); });
+      if (here) pl.placed.forEach(q => { const it = byCat[q.cat]; if (!it || seenCat[q.cat]) return; seenCat[q.cat] = 1; dims.push({ roomId: o.id, kind: 'item', cat: q.cat, p: [o.x + q.cx, Y + (q.cat === 'uppers' ? 2.2 : q.h) + 0.14, o.y + q.cz], text: CATS[q.cat].name.split(' with ')[0] + ' ' + fmtDims(it) }); });
       const dn = WALLS[r.door.wall].n, dp = wallPoint(r, r.door.wall, r.door.t), wn = WALLS[r.win.wall].n, wp = wallPoint(r, r.win.wall, r.win.t);
-      dims.push({ roomId: o.id, kind: 'open', p: [o.x + dp[0] + dn[0] * 0.1, 2.18, o.y + dp[1] + dn[1] * 0.1], text: 'Door ' + fmtLen(r.door.width) + ' \u00d7 ' + fmtLen(2.03) });
-      dims.push({ roomId: o.id, kind: 'open', p: [o.x + wp[0] + wn[0] * 0.1, 2.34, o.y + wp[1] + wn[1] * 0.1], text: 'Window ' + fmtLen(1.4) + ' \u00d7 ' + fmtLen(1.3) });
-      wallSegments(r).forEach(sg => { const L = Math.hypot(sg.b[0] - sg.a[0], sg.b[1] - sg.a[1]); if (L < 0.6) return; dims.push({ roomId: o.id, kind: 'wall', p: [o.x + (sg.a[0] + sg.b[0]) / 2 + sg.n[0] * 0.12, 0, o.y + (sg.a[1] + sg.b[1]) / 2 + sg.n[1] * 0.12], text: fmtLen(L) }); });
+      if (here) dims.push({ roomId: o.id, kind: 'open', p: [o.x + dp[0] + dn[0] * 0.1, Y + 2.18, o.y + dp[1] + dn[1] * 0.1], text: 'Door ' + fmtLen(r.door.width) + ' \u00d7 ' + fmtLen(2.03) });
+      if (here) dims.push({ roomId: o.id, kind: 'open', p: [o.x + wp[0] + wn[0] * 0.1, Y + 2.34, o.y + wp[1] + wn[1] * 0.1], text: 'Window ' + fmtLen(1.4) + ' \u00d7 ' + fmtLen(1.3) });
+      if (here) wallSegments(r).forEach(sg => { const L = Math.hypot(sg.b[0] - sg.a[0], sg.b[1] - sg.a[1]); if (L < 0.6) return; dims.push({ roomId: o.id, kind: 'wall', p: [o.x + (sg.a[0] + sg.b[0]) / 2 + sg.n[0] * 0.12, 0, o.y + (sg.a[1] + sg.b[1]) / 2 + sg.n[1] * 0.12], text: fmtLen(L) }); });
       pl.placed.forEach(q => {
         const it = byCat[q.cat]; if (!it) return;
         const fg = new THREE.Group(); if (q.part) BUILD.sofaPart(fg, it, q); else BUILD[it.cat](fg, it);
-        fg.position.set(o.x + q.cx, 0, o.y + q.cz); fg.rotation.y = q.rot; fg.userData = { roomId: o.id, cat: q.cat };
+        fg.position.set(o.x + q.cx, Y, o.y + q.cz); fg.rotation.y = q.rot; fg.userData = { roomId: o.id, cat: q.cat };
         T.furnG.add(fg);
       });
     });
-    const cx = (bb.x0 + bb.x1) / 2, cz = (bb.z0 + bb.z1) / 2, ext = Math.max(bb.x1 - bb.x0, bb.z1 - bb.z0) / 2 + 3;
-    T.sun.position.set(cx + 6, 11, cz + 5); T.sun.target.position.set(cx, 0, cz);
+    /* A guard round each stairwell on the floor above it (NBC 9.8.8.1., at least 900 mm high in a dwelling, 9.8.8.3.). */
+    p.filter(pl => pl.room.type === 'stair' && floorOf(pl.room) + 1 <= floorNo).forEach(pl => buildGuard(pl.room, (floorOf(pl.room) + 1) * FH));
+    const cx = (bb.x0 + bb.x1) / 2, cz = (bb.z0 + bb.z1) / 2, ext = Math.max(bb.x1 - bb.x0, bb.z1 - bb.z0) / 2 + 3 + baseY();
+    T.sun.position.set(cx + 6, 11 + baseY(), cz + 5); T.sun.target.position.set(cx, baseY(), cz);
     const sc = T.sun.shadow.camera; sc.left = -ext; sc.right = ext; sc.top = ext; sc.bottom = -ext; sc.near = 0.5; sc.far = 40; sc.updateProjectionMatrix();
     const key = [bb.x0, bb.z0, bb.x1, bb.z1].join(',');
     walkTest = walkArea(plans);
     if (cam.key !== key) { cam.key = key; cam.radius = Math.max(bb.x1 - bb.x0, bb.z1 - bb.z0) * 1.4 + 4; }
-    if (!inside(cam.x, cam.z)) enterWalk(plans.find(p => p.room.id === cam.roomId) || plans[0]);
+    if (plans.length && (!inside(cam.x, cam.z) || !plans.some(p => p.room.id === cam.roomId))) enterWalk(plans.find(p => p.room.id === cam.roomId) || plans.find(p => p.room.type !== 'stair') || plans[0]);
     drawMini();
     highlight(); T.dirty = true;
+  }
+  /* A straight flight: solid steps from the bottom landing to the floor above, and a handrail on the open side.
+     It uses the same number of risers as the plan, scaled to the 3D storey height. */
+  function buildStair(g, o, S) {
+    const s = stairOf(o), rise = FH / s.n, wood = M(S.wood[1], 0.7), rail = M(S.metal, 0.5);
+    for (let i = 0; i < s.n - 1; i++) {
+      const a = s.s0 + i * s.run, top = (i + 1) * rise, along = s.dir > 0 ? a + s.run / 2 : s.length - a - s.run / 2;
+      const m = new THREE.Mesh(s.axis === 'x' ? new THREE.BoxGeometry(s.run, top, o.D - 0.02) : new THREE.BoxGeometry(o.W - 0.02, top, s.run), wood);
+      if (s.axis === 'x') m.position.set(along, top / 2, o.D / 2); else m.position.set(o.W / 2, top / 2, along);
+      m.castShadow = m.receiveShadow = true; g.add(m);
+    }
+    /* handrail 0.9 m above the nosings (NBC 9.8.7.4. 865 to 1070 mm), along one side */
+    const len = (s.n - 1) * s.run, ang = Math.atan2(FH - rise, len), rl = Math.hypot(len, FH - rise);
+    const hr = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, rl, 8), rail);
+    const mid = s.dir > 0 ? s.s0 + len / 2 : s.length - s.s0 - len / 2, yMid = rise + (FH - rise) / 2 + 0.9;
+    /* the cylinder stands along y; tip it so it runs up the flight */
+    if (s.axis === 'x') { hr.position.set(mid, yMid, 0.06); hr.rotation.z = -Math.atan2(s.dir * len, FH - rise); }
+    else { hr.position.set(0.06, yMid, mid); hr.rotation.x = Math.atan2(s.dir * len, FH - rise); }
+    void ang;
+    g.add(hr);
+  }
+  function buildGuard(o, y) {
+    const s = stairOf(o), m = M(0xf2f1ed, 0.6), g = new THREE.Group(), add = (w, d, x, z) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, 0.9, d), m); b.position.set(x, 0.45, z); b.castShadow = true; g.add(b); };
+    /* open only where the flight arrives */
+    if (s.axis === 'x') { add(o.W, 0.05, o.W / 2, 0); add(o.W, 0.05, o.W / 2, o.D); add(0.05, o.D, s.dir > 0 ? 0 : o.W, o.D / 2); }
+    else { add(0.05, o.D, 0, o.D / 2); add(0.05, o.D, o.W, o.D / 2); add(o.W, 0.05, o.W / 2, s.dir > 0 ? 0 : o.D); }
+    g.position.set(o.x, y, o.y); T.roomG.add(g);
   }
   /* A light outline on the piece under the pointer, so it is clear what a double-click will pick. */
   function setHot(h) {
@@ -227,7 +262,7 @@ const Scene3D = (function () {
       const w = canvas.clientWidth, h = canvas.clientHeight, walk = view === 'walk';
       for (const d of dims) {
         if (walk ? d.roomId !== cam.roomId : (d.kind === 'open' || (d.kind === 'item' && !((hot && hot.roomId === d.roomId && hot.cat === d.cat) || (sel && sel.roomId === d.roomId && sel.cat === d.cat))))) continue;
-        tmpV.set(d.p[0], d.kind === 'wall' ? (walk ? 2.52 : 0.2) : d.p[1], d.p[2]);
+        tmpV.set(d.p[0], d.kind === 'wall' ? baseY() + (walk ? 2.52 : 0.2) : d.p[1], d.p[2]);
         if (walk && Math.hypot(tmpV.x - cam.x, tmpV.z - cam.z) < 0.45) continue;
         tmpV.project(T.camera);
         if (tmpV.z > 1 || tmpV.z < -1 || Math.abs(tmpV.x) > 0.96 || Math.abs(tmpV.y) > 0.94) continue;
@@ -260,7 +295,7 @@ const Scene3D = (function () {
       enterWalk(pl); if (inside(p[0], p[1])) { cam.x = p[0]; cam.z = p[1]; }
       onMoved(); return true;
     }
-    path = pp; const e = pp[pp.length - 1]; dest.position.set(e[0], 0.012, e[1]); dest.visible = true; T.dirty = true;
+    path = pp; const e = pp[pp.length - 1]; dest.position.set(e[0], baseY() + 0.012, e[1]); dest.visible = true; T.dirty = true;
     return true;
   }
   function goRoom(id) { const pl = plans.find(p => p.room.id === id); if (pl) enterWalk(pl); }
@@ -298,13 +333,13 @@ const Scene3D = (function () {
   function setSelected(s) { sel = s; highlight(); }
   function placeCamera() {
     const c = T.camera, cx = (bb.x0 + bb.x1) / 2, cz = (bb.z0 + bb.z1) / 2;
-    if (view === 'walk') { c.fov = 72; c.position.set(cam.x, 1.6, cam.z); c.rotation.set(cam.pitch, cam.yaw, 0); }
-    else { c.fov = 50; c.position.set(cx + cam.radius * Math.sin(cam.phi) * Math.sin(cam.theta), 0.7 + cam.radius * Math.cos(cam.phi), cz + cam.radius * Math.sin(cam.phi) * Math.cos(cam.theta)); c.lookAt(cx, 0.7, cz); }
+    if (view === 'walk') { c.fov = 72; c.position.set(cam.x, baseY() + 1.6, cam.z); c.rotation.set(cam.pitch, cam.yaw, 0); }
+    else { c.fov = 50; c.position.set(cx + cam.radius * Math.sin(cam.phi) * Math.sin(cam.theta), 0.7 + baseY() * 0.6 + cam.radius * Math.cos(cam.phi), cz + cam.radius * Math.sin(cam.phi) * Math.cos(cam.theta)); c.lookAt(cx, 0.7 + baseY() * 0.6, cz); }
     c.updateProjectionMatrix();
   }
   function tick() {
     requestAnimationFrame(tick);
-    if (!T || !plans.length) return;
+    if (!T || !shownN) return;
     const now = performance.now(), dt = Math.min(0.05, lastT ? (now - lastT) / 1000 : 0); lastT = now;
     if (view === 'walk') {
       const f = (keys.KeyW || keys.ArrowUp || keys.padF ? 1 : 0) - (keys.KeyS || keys.ArrowDown || keys.padB ? 1 : 0), s = (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0);
@@ -358,7 +393,7 @@ const Scene3D = (function () {
       const h = firstHit(e), furn = h && h.cat && h.cat !== 'rug';
       setHot(furn ? { roomId: h.roomId, cat: h.cat } : null);
       const ok = view === 'walk' && h && !furn && inside(h.x, h.z);
-      if (hover.visible !== !!ok || ok) { hover.visible = !!ok; if (ok) hover.position.set(h.x, 0.011, h.z); T.dirty = true; }
+      if (hover.visible !== !!ok || ok) { hover.visible = !!ok; if (ok) hover.position.set(h.x, baseY() + 0.011, h.z); T.dirty = true; }
     });
     canvas.addEventListener('pointerleave', () => { setHot(null); if (hover.visible) { hover.visible = false; T.dirty = true; } });
     /* Double-click picks a piece of furniture; single clicks walk, so nothing is chosen by accident. */
@@ -413,7 +448,7 @@ const Scene3D = (function () {
   /* A clean picture of the current view for the photo render: no rings or selection boxes, cropped to the nearest
      of 3:2, 2:3 or 1:1 and scaled to the size the image model takes. Returns {image, shape} or null. */
   function snapshot() {
-    if (!T || !plans.length) return null;
+    if (!T || !shownN) return null;
     const hidden = [hover, dest, T.box, hotBox].filter(o => o && o.visible); hidden.forEach(o => { o.visible = false; });
     placeCamera(); T.renderer.render(T.scene, T.camera);
     const cw = canvas.width, ch = canvas.height, a = cw / ch;

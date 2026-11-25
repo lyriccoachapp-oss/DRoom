@@ -87,16 +87,22 @@ const Report = (function () {
     color(ink); doc.setFont('helvetica', 'bold'); t('Estimate total ' + money(total), W - M, y + 14, 14, { align: 'right' });
     doc.setFont('helvetica', 'normal'); color(muted); t('Budget ' + money(o.state.budget), W - M, y + 30, 10, { align: 'right' });
     y += 54;
-    /* Floor plan */
-    try {
-      const png = await svgToPng(BuildDrawing.toSvgText(plans, o.takeoff, o.date), 1600), maxH = o.view3d ? 300 : 420, k = Math.min((W - 2 * M) / png.w, maxH / png.h);
-      doc.addImage(png.data, 'JPEG', M + ((W - 2 * M) - png.w * k) / 2, y, png.w * k, png.h * k); y += png.h * k + 12;
-    } catch (e) { color(muted); t('The floor plan could not be drawn.', M, y + 12, 10); y += 24; }
+    /* Floor plans: the ground floor on the first page, each floor above on a page of its own */
+    const floors = Array.from(new Set(plans.map(p => floorOf(p.room)))).sort((a, b) => a - b), multi = floors.length > 1;
+    const planImage = async (f, maxH) => {
+      const fp = plans.filter(p => floorOf(p.room) === f);
+      try {
+        const png = await svgToPng(BuildDrawing.toSvgText(fp, takeoff(fp, o.state.build), o.date, multi ? 'Floor ' + (f + 1) + ' plan' : null), 1600), k = Math.min((W - 2 * M) / png.w, maxH / png.h);
+        doc.addImage(png.data, 'JPEG', M + ((W - 2 * M) - png.w * k) / 2, y, png.w * k, png.h * k); y += png.h * k + 12;
+      } catch (e) { color(muted); t('The floor plan could not be drawn.', M, y + 12, 10); y += 24; }
+    };
+    await planImage(floors[0], o.view3d ? 300 : 420);
     /* 3D view */
     if (o.view3d && o.view3d.image) {
       const ar = o.view3d.shape === 'portrait' ? 1.5 : o.view3d.shape === 'square' ? 1 : 2 / 3, w = Math.min(W - 2 * M, (H - M - y) / ar);
       if (w > 200) { doc.addImage(o.view3d.image, 'JPEG', M + ((W - 2 * M) - w) / 2, y, w, w * ar); y += w * ar + 12; }
     }
+    for (const f of floors.slice(1)) { doc.addPage(); y = M; await planImage(f, H - 2 * M - 20); }
     /* Estimate */
     doc.addPage(); y = M;
     doc.setFont('helvetica', 'bold'); color(ink); t('Estimate', M, y + 12, 16); y += 30;

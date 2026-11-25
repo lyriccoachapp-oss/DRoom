@@ -93,3 +93,14 @@ published code text and the Nova Scotia regulation. It is a design aid, not a pe
 store products the plan uses); **Open** reads it back, on any computer, even without the store feeds. **PDF report**
 makes a letter-size PDF: summary, floor plan, a 3D view, the estimate by room with quantities, boxes, store and a
 link to each product, and the code check. `app/js/report.js`; jsPDF 2.5.1 is loaded from cdnjs on first use.
+
+## Floors and stairs
+
+Each room has a `floor` (0 is the ground floor). The Rooms panel has floor tabs and **+ Floor**; the plan, the 3D view
+and the Build drawing show one floor at a time (the floor below is drawn faintly, and stairwells from below show as
+open), while the shopping list, the estimate and the takeoff cover the whole home. A **Stairs** room holds a straight
+flight to the floor above: `stairOf` in `layout.js` picks risers of at most 200 mm and treads of 255-355 mm for the
+storey height (wall height plus 0.3 m), with a bottom landing at the door end. The code check adds stair width,
+steps, flight height, headroom, the landing at the top, doorways to stairs (810 mm), doors that open to nowhere on an
+upper floor, and stairs to every upper floor. The takeoff puts the foundation and slab under the ground floor only and
+adds floor framing and stairs.

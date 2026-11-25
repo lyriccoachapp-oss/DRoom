@@ -38,6 +38,12 @@ button{cursor:pointer}
 .brand b{color:var(--accent)}
 .logo{width:24px; height:24px; border:3px solid var(--ink); border-radius:6px; position:relative}
 .logo::after{content:""; position:absolute; left:4px; right:4px; bottom:-3px; height:9px; background:var(--accent); border-radius:2px 2px 0 0}
+.floorbar{flex-wrap:wrap}
+#plan .ghost{fill:none; stroke:var(--muted); stroke-width:3; stroke-dasharray:10 8; opacity:.45; pointer-events:none}
+#plan .wellbox{fill:var(--chip); stroke:var(--ink); stroke-width:3} #plan .wellx{stroke:var(--muted); stroke-width:2} #plan .well{pointer-events:none}
+#plan .welltext{font-size:22px; font-weight:700; fill:var(--muted)}
+#plan .tread{stroke:var(--muted); stroke-width:2; pointer-events:none} #plan .uparrow{stroke:var(--ink); stroke-width:3; pointer-events:none} #plan .uphead{fill:var(--ink)}
+.floorbar .addfloor{color:var(--accent)}
 .hist{margin-left:auto; display:flex; gap:8px; flex-wrap:wrap}
 .projmsg{flex-basis:100%; text-align:right; font-size:12.5px; color:var(--muted); margin:0}
 .hist .btn{padding:6px 12px; background:var(--panel)}
@@ -246,6 +252,7 @@ input[type=file]{max-width:100%; font-size:13px}
       </div>
       <div class="grp">
         <h2>Rooms</h2>
+        <div class="seg floorbar" id="floorBar" role="group" aria-label="Floor"></div>
         <ul class="rooms" id="roomList"></ul>
         <div class="btnrow" id="addRow">
           <button type="button" class="btn" data-add="living">+ Living</button>
@@ -254,17 +261,21 @@ input[type=file]{max-width:100%; font-size:13px}
           <button type="button" class="btn" data-add="bathroom">+ Bathroom</button>
           <button type="button" class="btn" data-add="dining">+ Dining</button>
           <button type="button" class="btn" data-add="office">+ Office</button>
+          <button type="button" class="btn" data-add="hall">+ Hallway</button>
+          <button type="button" class="btn" data-add="stair">+ Stairs</button>
         </div>
       </div>
       <div class="grp" id="roomGrp">
         <h2>Selected room</h2>
         <div class="row"><label for="inName">Name</label><input id="inName" type="text" maxlength="24" autocomplete="off"></div>
-        <div class="row"><label for="selType">Type</label><select id="selType"><option value="living">Living room</option><option value="bedroom">Bedroom</option><option value="kitchen">Kitchen</option><option value="bathroom">Bathroom</option><option value="dining">Dining room</option><option value="office">Office</option><option value="hall">Hallway</option></select></div>
+        <div class="row"><label for="selType">Type</label><select id="selType"><option value="living">Living room</option><option value="bedroom">Bedroom</option><option value="kitchen">Kitchen</option><option value="bathroom">Bathroom</option><option value="dining">Dining room</option><option value="office">Office</option><option value="hall">Hallway</option><option value="stair">Stairs</option></select></div>
         <div class="row"><label for="selShape">Shape</label><select id="selShape"><option value="">Rectangle</option><option value="NE">L, notch top right</option><option value="NW">L, notch top left</option><option value="SE">L, notch bottom right</option><option value="SW">L, notch bottom left</option></select></div>
         <div class="row"><label>Walls</label><div class="paints" id="paints" role="group" aria-label="Wall colour"></div></div>
         <div class="row"><label for="selWallFin">Finish</label><select id="selWallFin" aria-label="Wall finish"><option value="">Paint only</option><option value="walltile">Wall tile</option><option value="wallpaper">Wallpaper</option></select><select id="selWallOn" aria-label="Which walls"><option value="all">All walls</option><option value="N">Top wall</option><option value="E">Right wall</option><option value="S">Bottom wall</option><option value="W">Left wall</option></select></div>
         <div class="row"><label for="selDoor">Door</label><select id="selDoor"><option value="swing">Hinged</option><option value="pocket">Pocket</option><option value="barn">Barn, sliding</option><option value="open">Open, no door</option></select></div>
         <div class="row"><label for="selDoorW">Opening</label><select id="selDoorW"><option value="0.71">28 in</option><option value="0.76">30 in</option><option value="0.81">32 in</option><option value="0.86">34 in</option><option value="0.91">36 in</option></select></div>
+        <div class="row"><label for="selDoorWall">Door on</label><select id="selDoorWall"><option value="N">Top wall</option><option value="E">Right wall</option><option value="S">Bottom wall</option><option value="W">Left wall</option></select><input id="inDoorPos" type="range" min="0" max="1" step="0.01" aria-label="Door position along the wall" style="accent-color:var(--accent)"></div>
+        <div class="row"><label for="selWinWall">Window on</label><select id="selWinWall"><option value="N">Top wall</option><option value="E">Right wall</option><option value="S">Bottom wall</option><option value="W">Left wall</option></select><input id="inWinPos" type="range" min="0" max="1" step="0.01" aria-label="Window position along the wall" style="accent-color:var(--accent)"></div>
         <div class="btnrow" id="doorBtns"><button type="button" class="btn" id="btnDoorSide">Flip hinge side</button><button type="button" class="btn" id="btnDoorSwing">Open outward</button></div>
         <div class="row"><label for="inW">Width</label><input id="inW" type="range" min="1.6" max="12" step="0.1"><output id="outW" class="num"></output></div>
         <div class="row"><label for="inD">Depth</label><input id="inD" type="range" min="1.6" max="12" step="0.1"><output id="outD" class="num"></output></div>
