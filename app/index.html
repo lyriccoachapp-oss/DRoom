@@ -189,6 +189,14 @@ input[type=file]{max-width:100%; font-size:13px}
 .alt[aria-current="true"]{background:var(--accent-soft); border-color:var(--accent)}
 .alt:disabled{opacity:.5; cursor:not-allowed}
 .alt .sw{width:18px; height:18px; border-radius:4px}
+.sw{position:relative; overflow:hidden; flex:none}
+.sw img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover; background:#fff}
+.item-head{grid-template-columns:44px minmax(0,1fr) auto}
+.item-head .sw{width:44px; height:44px; border-radius:8px}
+.alt{grid-template-columns:34px minmax(0,1fr) auto}
+.alt .sw.has-photo{width:34px; height:34px; border-radius:6px}
+.ic-photo{display:block; width:100%; aspect-ratio:4/3; position:relative; overflow:hidden; border-radius:10px; margin:10px 0 0; background:#fff; border:1px solid var(--line)}
+.ic-photo img{position:absolute; inset:0; width:100%; height:100%; object-fit:contain; background:#fff}
 .alt .nm{font-weight:600; font-size:13px}
 .alt .meta{font-size:11.5px}
 .delta{font-size:12px; font-weight:600; white-space:nowrap; text-align:right}
@@ -312,6 +320,7 @@ input[type=file]{max-width:100%; font-size:13px}
     <div class="walkrooms" id="walkRooms" hidden></div>
     <section class="itemcard" id="itemCard" aria-label="Selected item" hidden>
       <div class="ic-top"><button type="button" class="btn primary" id="icClose">Back to walking</button><span class="pr num" id="icPrice"></span></div>
+      <div class="ic-photo" id="icPhoto" hidden></div>
       <div class="ic-title"><div class="nm" id="icName"></div><div class="meta num" id="icMeta"></div></div>
       <div id="icBody"></div>
     </section>

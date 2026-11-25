@@ -118,4 +118,6 @@ for (const cat in CATS) {
   }
 }
 /* Boxes to buy for an area line, when the product says how much one box covers. */
+/* The word for what boxesFor counts. */
+function boxWord(l, n) { return l.item.perPiece ? (n === 1 ? ' piece' : ' pieces') : l.item.cat === 'wallpaper' ? (n === 1 ? ' roll' : ' rolls') : (n === 1 ? ' box' : ' boxes'); }
 function boxesFor(l) { return l.area && l.item.cover > 0 ? Math.ceil(l.qty / l.item.cover - 1e-9) : 0; }
