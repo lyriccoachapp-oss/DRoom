@@ -135,3 +135,24 @@ test('a large tile with no stated unit and no box coverage is read as priced per
   assert.deepStrictEqual({ u: row.price_unit, a: row.price_unit_assumed, s: row.price_per_sqft }, { u: 'piece', a: true, s: 2.79 });
   assert.strictEqual(rowFrom({ product_id: 'V2', title: 'Porcelain Tile Sample', price: 2 }, null, 'tile'), null, 'accessories and samples stay out');
 });
+
+test('a US result quoting "sq. ft." with a case price is priced per case when the case coverage is known', () => {
+  const row = rowFrom({ product_id: 'U1', title: 'Dusk Cherry 22 MIL x 8.7 in. W x 48 in. L Click Lock Waterproof Luxury Vinyl Plank Flooring (20.1 sq. ft./case)', price: 59.97, unit: 'sq. ft.' }, null, 'floor');
+  assert.deepStrictEqual({ u: row.price_unit, s: row.price_per_sqft, w: row.tile_width_in, l: row.tile_length_in }, { u: 'box', s: 2.98, w: 8.7, l: 48 });
+  const bare = rowFrom({ product_id: 'U2', title: 'Oak Vinyl Plank Flooring', price: 2.49, unit: 'sq. ft.' }, null, 'floor');
+  assert.deepStrictEqual({ u: bare.price_unit, s: bare.price_per_sqft }, { u: 'sqft', s: 2.49 }, 'with no coverage the unit is taken at its word');
+});
+
+test('Canadian rows take missing specifications from the same model on the US site', () => {
+  const { merge } = require('../tools/merge-homedepot');
+  const ca = [{ sku: 'C1', model: 'BK-106 24', name: 'Tile', price: 50, coverage_sqft: 10, price_per_sqft: 5 },
+    { sku: 'C2', model: 'W1', name: 'Paper', price: 56, coverage_sqft: 28, coverage_assumed: true, price_per_sqft: 2 },
+    { sku: 'C3', model: 'NOPE', name: 'Other', price: 9 }];
+  const us = [{ sku: 'U1', model: 'bk10624', price: 30, url: 'https://example.com/u1', thickness_in: 0.315, finish: 'Matte', color: 'Brown' },
+    { sku: 'U2', model: 'w1', price: 40, coverage_sqft: 56 }];
+  const r = merge(ca, us);
+  assert.deepStrictEqual({ m: r.matched, c: r.coverage }, { m: 2, c: 1 });
+  assert.deepStrictEqual({ t: r.rows[0].thickness_in, f: r.rows[0].finish, p: r.rows[0].price, u: r.rows[0].price_usd }, { t: 0.315, f: 'Matte', p: 50, u: 30 });
+  assert.deepStrictEqual({ c: r.rows[1].coverage_sqft, a: r.rows[1].coverage_assumed, s: r.rows[1].price_per_sqft }, { c: 56, a: undefined, s: 1 });
+  assert.strictEqual(r.rows[2], ca[2]);
+});

@@ -63,14 +63,16 @@ function rowFrom(hit, detail, wantKind) {
   /* Tile and flooring are sold by the square foot or by the box; say which, so the planner can price a square foot. */
   if (m.kind !== 'paint') {
     if (unitText) row.store_unit = unitText.slice(0, 20);
-    if (/sq\.? ?ft|sqft|square f/.test(unitText)) { row.price_unit = 'sqft'; row.price_per_sqft = p; }
-    /* Priced per tile or plank: one piece covers its own face. */
+    /* The search result's unit says how the product is measured, not what the price buys: The Home Depot US gives
+       "sq. ft." with the price of a whole case or roll. So a known box coverage always wins. */
+    if (m.coverage_sqft) { row.price_unit = 'box'; row.price_per_sqft = Math.round(p / m.coverage_sqft * 100) / 100; }
     /* Canadian results give no unit for single large tiles. Prices only line up across sizes of one tile when read per piece
        (12 x 24 in at $4.76 and 24 x 48 in at $23.10 are $2.38 and $2.89 a sq ft), so tile with no unit and no box coverage is
        taken as priced per piece, and marked so. */
     else if (!unitText && !m.coverage_sqft && m.width_in && (m.kind === 'tile' || m.kind === 'walltile')) { const a = m.width_in * m.length_in / 144; row.price_unit = 'piece'; row.price_unit_assumed = true; row.coverage_sqft = Math.round(a * 1000) / 1000; row.price_per_sqft = Math.round(p / a * 100) / 100; }
+    /* Priced per tile or plank: one piece covers its own face. */
     else if (/^(each|ea|piece|pc|pcs|unit)\.?$/.test(unitText) && m.width_in && m.kind !== 'wallpaper') { const a = m.width_in * m.length_in / 144; row.price_unit = 'piece'; row.coverage_sqft = Math.round(a * 1000) / 1000; row.price_per_sqft = Math.round(p / a * 100) / 100; }
-    else if (m.coverage_sqft) { row.price_unit = 'box'; row.price_per_sqft = Math.round(p / m.coverage_sqft * 100) / 100; }
+    else if (/sq\.? ?ft|sqft|square f/.test(unitText)) { row.price_unit = 'sqft'; row.price_per_sqft = p; }
     /* A wallpaper roll with no stated coverage is taken as a standard single roll of 28 sq ft, and marked so. */
     else if (m.kind === 'wallpaper') { row.coverage_sqft = 28; row.coverage_assumed = true; row.price_unit = 'box'; row.price_per_sqft = Math.round(p / 28 * 100) / 100; }
   }
