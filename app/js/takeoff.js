@@ -117,8 +117,12 @@ function electricalPlan(plans, H) {
 
 function takeoff(plans, o) {
   const opt = buildOpts(o), W = RULES.waste, H = opt.height * FT, sp = opt.spacing * IN;
-  const runs = wallRuns(plans), len = f => runs.filter(f).reduce((s, r) => s + (r.b - r.a), 0);
+  /* Walls are merged floor by floor; the foundation and slab are under the ground floor only. */
+  const fl = Array.from(new Set(plans.map(p => floorOf(p.room)))).sort((a, b) => a - b);
+  const runs = [].concat.apply([], fl.map(f => wallRuns(plans.filter(p => floorOf(p.room) === f)).map(r => Object.assign(r, { floor: f })))), len = f => runs.filter(f).reduce((s, r) => s + (r.b - r.a), 0);
   const Le = len(r => r.ext), Li = len(r => !r.ext), area = plans.reduce((s, p) => s + p.r.area, 0);
+  const Le0 = len(r => r.ext && !r.floor), area0 = plans.filter(p => !floorOf(p.room)).reduce((s, p) => s + p.r.area, 0), areaUp = area - area0;
+  const stairs = plans.filter(p => p.room.type === 'stair');
   const ft = m => m / FT, up = Math.ceil, groups = [], line = (name, qty, unit, detail) => ({ name, qty, unit, detail: detail || '' });
   const doors = plans.length, windows = plans.length;
   /* Studs: one per spacing along each run plus one, two more at each end for corners and tees, four per opening (kings and jacks). */
@@ -129,7 +133,8 @@ function takeoff(plans, o) {
   groups.push({ title: 'Framing', lines: [
     line('2x6 studs, ' + precut + ' in', sExt, 'pcs', 'outside walls at ' + opt.spacing + ' in on centre'),
     line('2x4 studs, ' + precut + ' in', sInt, 'pcs', 'inside walls at ' + opt.spacing + ' in on centre'),
-    line('2x6 pressure-treated plate, 16 ft', stock(Le), 'pcs', 'bottom plate on concrete, ' + Math.round(ft(Le)) + ' lin ft'),
+    line('2x6 pressure-treated plate, 16 ft', stock(Le0), 'pcs', 'bottom plate on concrete, ' + Math.round(ft(Le0)) + ' lin ft'),
+    ...(Le > Le0 + 0.01 ? [line('2x6 plate, 16 ft', stock(Le - Le0), 'pcs', 'bottom plate, outside walls of upper floors')] : []),
     line('2x6 plate, 16 ft', stock(2 * Le), 'pcs', 'double top plate, outside walls'),
     line('2x4 plate, 16 ft', stock(3 * Li), 'pcs', 'bottom and double top plate, inside walls'),
     line('2x10 header stock, 16 ft', stock(2 * headerM), 'pcs', 'two plies over ' + (doors + windows) + ' openings'),
@@ -141,20 +146,32 @@ function takeoff(plans, o) {
     line('R-20 batt insulation', up(Le * H / (FT * FT) * 1.05), 'ft²', 'outside walls')
   ] });
   /* Concrete, in cubic metres then cubic yards. */
-  const yd = m3 => Math.ceil(m3 / 0.7646 * 10) / 10, slab = area * opt.slab * IN, conc = [];
+  const yd = m3 => Math.ceil(m3 / 0.7646 * 10) / 10, slab = area0 * opt.slab * IN, conc = [];
   let total = slab;
   if (opt.foundation === 'frost') {
-    const foot = Le * RULES.footing.w * IN * RULES.footing.d * IN, wall = Le * RULES.frostWall.t * IN * RULES.frostWall.h * FT; total += foot + wall;
-    conc.push(line('Strip footing ' + RULES.footing.w + ' x ' + RULES.footing.d + ' in', yd(foot), 'yd³', Math.round(ft(Le)) + ' lin ft of outside wall'));
+    const foot = Le0 * RULES.footing.w * IN * RULES.footing.d * IN, wall = Le0 * RULES.frostWall.t * IN * RULES.frostWall.h * FT; total += foot + wall;
+    conc.push(line('Strip footing ' + RULES.footing.w + ' x ' + RULES.footing.d + ' in', yd(foot), 'yd³', Math.round(ft(Le0)) + ' lin ft of outside wall'));
     conc.push(line('Frost wall ' + RULES.frostWall.t + ' in x ' + RULES.frostWall.h + ' ft', yd(wall), 'yd³', 'under the outside walls'));
   } else {
-    const edge = Le * RULES.thickEdge.w * IN * (RULES.thickEdge.d - opt.slab) * IN; total += edge;
-    conc.push(line('Thickened slab edge ' + RULES.thickEdge.w + ' x ' + RULES.thickEdge.d + ' in', yd(edge), 'yd³', Math.round(ft(Le)) + ' lin ft of perimeter'));
+    const edge = Le0 * RULES.thickEdge.w * IN * (RULES.thickEdge.d - opt.slab) * IN; total += edge;
+    conc.push(line('Thickened slab edge ' + RULES.thickEdge.w + ' x ' + RULES.thickEdge.d + ' in', yd(edge), 'yd³', Math.round(ft(Le0)) + ' lin ft of perimeter'));
   }
-  conc.push(line(opt.slab + ' in slab', yd(slab), 'yd³', Math.round(area / (FT * FT)) + ' ft² of floor'));
+  conc.push(line(opt.slab + ' in slab', yd(slab), 'yd³', Math.round(area0 / (FT * FT)) + ' ft² of ground floor'));
   conc.push(line('Concrete to order, with ' + Math.round((W.concrete - 1) * 100) + '% waste', yd(total * W.concrete), 'yd³', (Math.ceil(total * W.concrete * 10) / 10) + ' m³'));
-  conc.push(line('Crushed stone base, ' + RULES.stoneBase + ' in', yd(area * RULES.stoneBase * IN * 1.1), 'yd³', 'under the slab'));
+  conc.push(line('Crushed stone base, ' + RULES.stoneBase + ' in', yd(area0 * RULES.stoneBase * IN * 1.1), 'yd³', 'under the slab'));
   groups.push({ title: 'Concrete', lines: conc });
+  /* Upper floors: joists at the wall stud spacing and a glued subfloor; a rough count for budgeting, not a joist design. */
+  if (areaUp > 0.01) groups.push({ title: 'Floor framing', lines: [
+    line('2x10 floor joists, 16 ft', up(areaUp / sp * W.lumber / (16 * FT)), 'pcs', 'at ' + opt.spacing + ' in on centre under ' + Math.round(areaUp / (FT * FT)) + ' ft² of upper floor'),
+    line('3/4 in T&G OSB subfloor, 4x8', up(areaUp / sheet * W.sheet), 'sheets', 'glued and screwed'),
+    line('Joist hangers', up(areaUp / sp / (16 * FT)) * 2, 'pcs', 'two per joist')
+  ] });
+  if (stairs.length) groups.push({ title: 'Stairs', lines: [
+    line('2x12 stair stringers, 16 ft', stairs.length * 3, 'pcs', 'three per straight flight'),
+    line('Treads', stairs.reduce((s, p) => s + stairOf(p.room).n - 1, 0), 'pcs', stairs.map(p => { const s = stairOf(p.room); return s.n + ' risers of ' + Math.round(s.rise * 1000) + ' mm, treads ' + Math.round(s.run * 1000) + ' mm'; }).join('; ')),
+    line('Handrail, 12 ft', stairs.length, 'pcs', 'one side, 865 to 1070 mm high'),
+    line('Guard at the stairwell', Math.round(ft(stairs.reduce((s, p) => s + p.room.W * (stairOf(p.room).axis === 'x' ? 2 : 1) + p.room.D * (stairOf(p.room).axis === 'x' ? 1 : 2), 0))), 'lin ft', 'at least 900 mm high, on the floor above')
+  ] });
   /* Drains and vents. */
   const pl = plumbingPlan(plans, H), pls = [], count = c => pl.fixtures.filter(f => f.cat === c).length;
   if (pl.fixtures.length) {

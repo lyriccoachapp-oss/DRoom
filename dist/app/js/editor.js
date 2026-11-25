@@ -35,6 +35,20 @@ const PlanEditor = (function () {
     const a = wallPoint(r, w, t - wd / 2), b = wallPoint(r, w, t + wd / 2), c = wallPoint(r, w, t);
     return { x1: (o.x + a[0]) * S, y1: (o.y + a[1]) * S, x2: (o.x + b[0]) * S, y2: (o.y + b[1]) * S, cx: (o.x + c[0]) * S, cy: (o.y + c[1]) * S };
   }
+  /* A straight flight in plan: one line per riser and an arrow up the flight. */
+  function stairSymbol(o, g) {
+    const s = stairOf(o), f = stairFlight(o, s), X = a => (o.x + a) * S, Y = a => (o.y + a) * S;
+    for (let i = 0; i < s.n; i++) {
+      const t = s.dir > 0 ? s.s0 + i * s.run : s.length - s.s0 - i * s.run;
+      if (s.axis === 'x') el('line', { x1: X(t), y1: Y(0.03), x2: X(t), y2: Y(o.D - 0.03), class: 'tread' }, g);
+      else el('line', { x1: X(0.03), y1: Y(t), x2: X(o.W - 0.03), y2: Y(t), class: 'tread' }, g);
+    }
+    const a0 = s.dir > 0 ? s.s0 * 0.5 : s.length - s.s0 * 0.5, a1 = s.dir > 0 ? s.length - 0.25 : 0.25;
+    const pts = s.axis === 'x' ? [[X(a0), Y(o.D / 2)], [X(a1), Y(o.D / 2)]] : [[X(o.W / 2), Y(a0)], [X(o.W / 2), Y(a1)]];
+    el('line', { x1: pts[0][0], y1: pts[0][1], x2: pts[1][0], y2: pts[1][1], class: 'uparrow', 'marker-end': 'url(#uparrow)' }, g);
+    el('text', { x: pts[0][0] + (s.axis === 'x' ? 0 : 14), y: pts[0][1] + (s.axis === 'x' ? -10 : 0), class: 'welltext' }, g, 'UP');
+    void f;
+  }
   /* Plan symbol for the door, drawn the way architectural plans show it. */
   function doorSymbol(o, r, g) {
     const dr = r.door, w = dr.width, n = WALLS[dr.wall].n, hz = WALLS[dr.wall].horiz, along = hz ? [1, 0] : [0, 1], left = dr.side === 'left';
@@ -62,15 +76,27 @@ const PlanEditor = (function () {
     const st = get();
     if (!drag || !fitted) fit(st.rooms);
     svg.textContent = '';
-    const defs = el('defs', {}, svg), pat = el('pattern', { id: 'grid', width: S, height: S, patternUnits: 'userSpaceOnUse' }, defs);
+    const defs = el('defs', {}, svg), mk = el('marker', { id: 'uparrow', viewBox: '0 0 10 10', refX: 8, refY: 5, markerWidth: 7, markerHeight: 7, orient: 'auto' }, defs);
+    el('path', { d: 'M 0 0 L 10 5 L 0 10 z', class: 'uphead' }, mk);
+    const pat = el('pattern', { id: 'grid', width: S, height: S, patternUnits: 'userSpaceOnUse' }, defs);
     el('path', { d: 'M ' + S + ' 0 L 0 0 0 ' + S, class: 'gridline' }, pat);
     const vb = svg.getAttribute('viewBox').split(' ').map(Number);
     el('rect', { x: vb[0], y: vb[1], width: vb[2], height: vb[3], fill: 'url(#grid)' }, svg);
     if (st.trace) el('image', { href: st.trace.src, x: 0, y: 0, width: st.trace.width * S, height: st.trace.width / st.trace.aspect * S, opacity: st.trace.opacity, preserveAspectRatio: 'none', 'pointer-events': 'none' }, svg);
+    /* The floor below, faint, to line rooms up over it; stairwells from below are open here. */
+    (st.below || []).forEach(o => el('path', { d: 'M ' + roomPolygon(o).map(p => ((o.x + p[0]) * S) + ' ' + ((o.y + p[1]) * S)).join(' L ') + ' Z', class: 'ghost' }, svg));
+    (st.stairsBelow || []).forEach(o => {
+      const g = el('g', { class: 'well' }, svg);
+      el('rect', { x: o.x * S, y: o.y * S, width: o.W * S, height: o.D * S, class: 'wellbox' }, g);
+      el('line', { x1: o.x * S, y1: o.y * S, x2: (o.x + o.W) * S, y2: (o.y + o.D) * S, class: 'wellx' }, g);
+      el('line', { x1: (o.x + o.W) * S, y1: o.y * S, x2: o.x * S, y2: (o.y + o.D) * S, class: 'wellx' }, g);
+      el('text', { x: (o.x + o.W / 2) * S, y: (o.y + o.D / 2) * S + 5, class: 'welltext', 'text-anchor': 'middle' }, g, 'Stairs down');
+    });
     if (!st.rooms.length) { el('text', { x: vb[0] + vb[2] / 2, y: vb[1] + vb[3] / 2, class: 'hintText', 'text-anchor': 'middle' }, svg, st.trace ? 'Detect rooms or add them by hand' : 'Add a room to start'); drawCal(); return; }
     st.rooms.forEach((o, i) => {
       const pl = st.plans[i], on = o.id === st.roomId, g = el('g', { class: 'rm' + (on ? ' on' : '') + (st.clash && st.clash.has(o.id) ? ' clash' : '') }, svg);
       el('path', { d: 'M ' + roomPolygon(o).map(p => ((o.x + p[0]) * S) + ' ' + ((o.y + p[1]) * S)).join(' L ') + ' Z', class: 'room', 'data-act': 'move', 'data-room': o.id }, g);
+      if (o.type === 'stair') stairSymbol(o, g);
       /* Floor kept free in front of doors and drawers, and where a neighbouring room's door opens onto this one. */
       if (pl) pl.placed.filter(q => q.clear && (q.cat === 'wardrobe' || q.cat === 'dresser' || q.cat === 'fridge' || q.cat === 'range')).map(q => q.clear).concat(pl.r.keepClear.filter(z => z.foreign)).forEach(z => el('rect', { x: (o.x + z.cx - z.hx) * S, y: (o.y + z.cz - z.hz) * S, width: z.hx * 2 * S, height: z.hz * 2 * S, class: 'clr' }, g));
       if (pl) pl.placed.filter(q => q.cat !== 'uppers').sort((a, b) => (b.flat ? 1 : 0) - (a.flat ? 1 : 0)).forEach(q => el('rect', { x: (o.x + q.cx - q.hx) * S, y: (o.y + q.cz - q.hz) * S, width: q.hx * 2 * S, height: q.hz * 2 * S, rx: 6, class: 'furn' + (q.flat ? ' rug' : '') + (st.sel && st.sel.roomId === o.id && st.sel.cat === q.cat ? ' sel' : '') }, g));

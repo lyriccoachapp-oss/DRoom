@@ -16,7 +16,7 @@ const BuildDrawing = (function () {
     const v = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
     return { paper: v('--plan-room') || LIGHT.paper, ink: v('--ink') || LIGHT.ink, muted: v('--muted') || LIGHT.muted, faint: v('--line') || LIGHT.faint, water: v('--plan-win') || LIGHT.water, power: v('--sun') || LIGHT.power };
   }
-  function draw(svg, plans, t, pal, date) {
+  function draw(svg, plans, t, pal, date, title) {
     pal = pal || cssPalette();
     svg.textContent = '';
     if (!plans.length) { svg.setAttribute('viewBox', '0 0 600 400'); el('text', { x: 300, y: 200, 'text-anchor': 'middle', 'font-family': FONT, 'font-size': 22, fill: pal.muted }, svg, 'Add rooms on the Plan tab to get a drawing'); return; }
@@ -73,6 +73,14 @@ const BuildDrawing = (function () {
       el('rect', { x: px - 16, y: py - 16, width: 32, height: 32, fill: pal.power, stroke: pal.ink, 'stroke-width': 2 }, svg);
       txt(px, py + 5, 'P', 15, { 'font-weight': 700 });
     }
+    /* stairs: a line per riser and an arrow up the flight */
+    plans.filter(pl => pl.room.type === 'stair').forEach(pl => {
+      const o = pl.room, s = stairOf(o);
+      for (let i = 0; i < s.n; i++) { const tt = s.dir > 0 ? s.s0 + i * s.run : s.length - s.s0 - i * s.run; if (s.axis === 'x') ln((o.x + tt) * S, o.y * S + 4, (o.x + tt) * S, (o.y + o.D) * S - 4, { 'stroke-width': 1.2, stroke: pal.muted }); else ln(o.x * S + 4, (o.y + tt) * S, (o.x + o.W) * S - 4, (o.y + tt) * S, { 'stroke-width': 1.2, stroke: pal.muted }); }
+      const a0 = s.dir > 0 ? s.s0 / 2 : s.length - s.s0 / 2, a1 = s.dir > 0 ? s.length - 0.2 : 0.2, P = v => s.axis === 'x' ? [(o.x + v) * S, (o.y + o.D / 2) * S] : [(o.x + o.W / 2) * S, (o.y + v) * S], p0 = P(a0), p1 = P(a1);
+      ln(p0[0], p0[1], p1[0], p1[1], { 'stroke-width': 2 });
+      txt(p0[0], p0[1] + 4, 'UP ' + s.n + 'R', 12, { 'font-weight': 700, fill: pal.ink });
+    });
     /* smoke alarms where NBC 9.10.19.3. puts them */
     if (typeof smokeAlarms === 'function') smokeAlarms(plans).forEach(a => {
       const x = a.p[0] * S, y = a.p[1] * S - 46;
@@ -99,7 +107,7 @@ const BuildDrawing = (function () {
     /* title block and legend */
     const ty = (bb.z1 + 0.75) * S, tx = bb.x0 * S, tw = (bb.x1 - bb.x0) * S;
     el('rect', { x: tx, y: ty, width: tw, height: 110, fill: 'none', stroke: pal.ink, 'stroke-width': 2 }, svg);
-    txt(tx + 14, ty + 34, 'FLOOR PLAN', 24, { 'text-anchor': 'start', 'font-weight': 700 });
+    txt(tx + 14, ty + 34, (title || 'Floor plan').toUpperCase(), 24, { 'text-anchor': 'start', 'font-weight': 700 });
     txt(tx + 14, ty + 60, plans.length + (plans.length === 1 ? ' room' : ' rooms') + ' · ' + fmtArea(t.area) + ' · walls ' + t.opt.height + ' ft · studs at ' + t.opt.spacing + ' in', 15, { 'text-anchor': 'start', fill: pal.muted });
     txt(tx + 14, ty + 86, 'Outside walls ' + fmtLen(t.ext) + ' · inside walls ' + fmtLen(t.int) + ' · dashed blue: drains · P: electrical panel · SA: smoke alarm', 13, { 'text-anchor': 'start', fill: pal.muted });
     txt(tx + tw - 14, ty + 34, 'DRoom', 20, { 'text-anchor': 'end', 'font-weight': 700 });
@@ -107,9 +115,9 @@ const BuildDrawing = (function () {
     txt(tx + tw - 14, ty + 86, 'Preliminary. Not for construction.', 13, { 'text-anchor': 'end', fill: pal.muted });
   }
   /* The drawing as a standalone SVG file, always on white paper. */
-  function toSvgText(plans, t, date) {
+  function toSvgText(plans, t, date, title) {
     const svg = document.createElementNS(NS, 'svg'); svg.setAttribute('xmlns', NS);
-    draw(svg, plans, t, LIGHT, date);
+    draw(svg, plans, t, LIGHT, date, title);
     const vb = svg.getAttribute('viewBox').split(' ').map(Number); svg.setAttribute('width', Math.round(vb[2])); svg.setAttribute('height', Math.round(vb[3]));
     return '<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(svg);
   }

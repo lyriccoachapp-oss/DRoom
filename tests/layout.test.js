@@ -363,3 +363,38 @@ test('code check: NBC 2020 Part 9 as adopted in Nova Scotia', () => {
   assert.strictEqual(check([], {}).res.length, 0);
   assert.deepStrictEqual(by(check(home(), { height: 8 }).res, 'Ceiling height').map(x => x.status), ['pass']);
 });
+
+test('two floors and a stair: geometry, code check and takeoff', () => {
+  const R = (id, type, x, y, W, D, doorWall, doorPos, winWall, extra) => Object.assign({ id, name: id, type, x, y, W, D, doorWall, doorPos, winWall, winPos: 0.5, overrides: {}, removed: [] }, extra || {});
+  const ground = () => [R('Living', 'living', 0, 0, 5.4, 4.2, 'E', 0.7, 'N'), R('Hall', 'hall', 5.4, 0, 1.4, 5.8, 'S', 0.5, 'N'),
+    R('Bed', 'bedroom', 6.8, 0, 4.0, 3.6, 'W', 0.5, 'N'), R('Bath', 'bathroom', 6.8, 3.6, 2.4, 2.2, 'W', 0.5, 'E'), R('Kitchen', 'kitchen', 0, 4.2, 3.8, 3.2, 'N', 0.82, 'S'),
+    R('Stairs', 'stair', -1.2, 0, 1.2, 4.6, 'E', 0.15, 'W', { doorWidth: 0.86 })];
+  const upper = () => [R('Bed2', 'bedroom', 0, 0, 4, 4.6, 'S', 0.3, 'N', { floor: 1 }), R('Hall2', 'hall', -1.2, 4.6, 4, 1.4, 'N', 0.1, 'S', { floor: 1 })];
+  const check = rooms => { ctx.__rooms = rooms; return JSON.parse(run('(() => { STOREY.h = 8 * 0.3048 + 0.3; const plans = __rooms.map(r => planRoom(r, "scandi", 1e6, [], __rooms.filter(o => floorOf(o) === floorOf(r)))); const t = takeoff(plans, { height: 8 }); return JSON.stringify({ res: codeCheck(plans, { height: 8 }), sa: smokeAlarms(plans), groups: t.groups.map(g => g.title), conc: t.groups.find(g => g.title === "Concrete").lines.map(l => l.detail), stairs: (t.groups.find(g => g.title === "Stairs") || { lines: [] }).lines.map(l => l.name + ": " + l.qty) }); })()')); };
+  const by = (res, title) => res.filter(x => x.title === title);
+
+  const st = JSON.parse(run('(() => { STOREY.h = 8 * 0.3048 + 0.3; return JSON.stringify(stairOf(' + JSON.stringify(ground()[5]) + ')); })()'));
+  assert.ok(st.ok && st.n === 14 && st.rise <= 0.2 && st.run >= 0.255 && st.run <= 0.355, JSON.stringify(st));
+
+  let c = check(ground().concat(upper()));
+  const fails = c.res.filter(x => x.status === 'fail');
+  assert.strictEqual(fails.length, 0, JSON.stringify(fails));
+  for (const t of ['Stair width', 'Steps', 'Flight height', 'Top of the stairs']) assert.deepStrictEqual(by(c.res, t).map(x => x.status), ['pass'], t);
+  assert.ok(by(c.res, 'Doorway width').length === 0, 'the 860 mm stair door is wide enough');
+  assert.deepStrictEqual(c.sa.map(a => a.where + '@' + a.floor).sort(), ['Bed2@1', 'Bed@0', 'Hall2@1', 'Hall@0'], 'smoke alarms floor by floor');
+  assert.ok(c.groups.includes('Floor framing') && c.groups.includes('Stairs'));
+  assert.ok(c.conc.some(d => /ground floor/.test(d)), 'the slab is under the ground floor only');
+
+  /* a room over the stairwell, no stairs, a door to nowhere upstairs, a narrow stair door, a short stair room */
+  const over = upper(); over[0].x = -1.2; over[0].W = 5.2;
+  assert.deepStrictEqual(by(check(ground().concat(over)).res, 'Headroom').map(x => x.status), ['fail']);
+  assert.ok(by(check(ground().filter(r => r.type !== 'stair').concat(upper())).res, 'Stairs').some(x => x.status === 'fail'));
+  const nowhere = upper(); nowhere[1].doorWall = 'S';
+  assert.deepStrictEqual(by(check(ground().concat(nowhere)).res, 'Door to nowhere').map(x => x.status), ['fail']);
+  const narrow = ground(); narrow[5].doorWidth = 0.76;
+  assert.ok(by(check(narrow.concat(upper())).res, 'Doorway width').some(x => x.status === 'fail' && /stairs/.test(x.detail)), 'a doorway to stairs needs 810 mm');
+  const short = ground(); short[5].D = 3.2;
+  assert.deepStrictEqual(by(check(short.concat(upper())).res, 'Steps').map(x => x.status), ['fail']);
+  const lonely = check(ground());
+  assert.deepStrictEqual(by(lonely.res, 'Top of the stairs').map(x => x.status), ['warn'], 'stairs to an empty floor');
+});

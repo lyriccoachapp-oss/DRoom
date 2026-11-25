@@ -89,7 +89,9 @@ const ROOMS = {
   bathroom: { name: 'Bathroom', weight: 0.6, all: ['vanity', 'toilet', 'tub', 'shower', 'tile', 'bathcab'], required: ['vanity', 'toilet'] },
   dining: { name: 'Dining room', weight: 0.7, all: ['dtable', 'dchair', 'floor', 'sideboard', 'rug', 'lamp', 'plant'], required: ['dtable', 'dchair'] },
   office: { name: 'Office', weight: 0.6, all: ['desk', 'ochair', 'floor', 'shelf', 'rug', 'lamp', 'plant'], required: ['desk', 'ochair'] },
-  hall: { name: 'Hallway', weight: 0.15, all: ['floor'], required: [] }
+  hall: { name: 'Hallway', weight: 0.15, all: ['floor'], required: [] },
+  /* A straight flight to the floor above; the room is the stairwell, open on the floor above. */
+  stair: { name: 'Stairs', weight: 0.05, all: [], required: [] }
 };
 const CATALOG = [], BYID = {};
 const idOf = (cat, style, tier, si) => cat + '-' + style + '-' + tier + '-' + si;
