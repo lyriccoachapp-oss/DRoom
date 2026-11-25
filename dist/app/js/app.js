@@ -69,6 +69,13 @@
   }
 
   /* ---------- rendering ---------- */
+  /* A store's product photo in place of the colour swatch. The swatch stays underneath, so a photo that does not load
+     (blocked, moved, offline) leaves the colour showing. Photos are linked from the store, not copied. */
+  function photo(box, it) {
+    if (!it || !it.img) return box;
+    const im = document.createElement('img'); im.src = it.img; im.alt = ''; im.loading = 'lazy'; im.decoding = 'async'; im.referrerPolicy = 'no-referrer';
+    im.addEventListener('error', () => im.remove()); box.classList.add('has-photo'); box.appendChild(im); return box;
+  }
   function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function press(box, v) { box.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.v === v ? 'true' : 'false')); }
   function renderSide() {
@@ -182,8 +189,8 @@
       p.lines.forEach(l => {
         const it = l.item, on = sel && sel.roomId === r.id && sel.cat === l.cat, li = el('li', 'item' + (on ? ' sel' : ''));
         const hd = el('button', 'item-head'); hd.type = 'button'; hd.setAttribute('aria-expanded', on ? 'true' : 'false');
-        const sw = el('span', 'sw'); sw.style.background = l.unit && r.wallColor ? r.wallColor : hex(it.swatch);
-        const mid = el('span'); mid.append(el('div', 'nm', it.name + (l.unit ? ', ' + l.qty + ' ' + l.unit : l.area ? ', ' + fmtArea(l.qty) : l.qty > 1 ? ' × ' + l.qty : '')), el('div', 'meta num', fmtDims(it) + (boxesFor(l) ? ' · ' + boxesFor(l) + (boxesFor(l) === 1 ? ' box' : ' boxes') : '')));
+        const sw = el('span', 'sw'); sw.style.background = l.unit && r.wallColor ? r.wallColor : hex(it.swatch); if (!l.unit) photo(sw, it);
+        const mid = el('span'); mid.append(el('div', 'nm', it.name + (l.unit ? ', ' + l.qty + ' ' + l.unit : l.area ? ', ' + fmtArea(l.qty) : l.qty > 1 ? ' × ' + l.qty : '')), el('div', 'meta num', fmtDims(it) + (boxesFor(l) ? ' · ' + boxesFor(l) + boxWord(l, boxesFor(l)) : '')));
         const pr = el('span', 'pr num', money(it.price * l.qty)); pr.appendChild(el('small', '', itemTag(it)));
         hd.append(sw, mid, pr); hd.addEventListener('click', () => select(on ? null : { roomId: r.id, cat: l.cat })); li.appendChild(hd);
         if (on) li.appendChild(altsFor(p, l));
@@ -232,7 +239,7 @@
     list.forEach(a => {
       const b = el('button', 'alt'); b.type = 'button'; b.dataset.text = (a.name + ' ' + (a.variant || '') + ' ' + itemTag(a) + ' ' + fmtDims(a)).toLowerCase();
       const ok = a.si === it.si || (fit[a.si] !== undefined ? fit[a.si] : (fit[a.si] = canFit(p, l.cat, a.si)));
-      const s2 = el('span', 'sw'); s2.style.background = hex(a.swatch);
+      const s2 = el('span', 'sw'); s2.style.background = hex(a.swatch); photo(s2, a);
       const m2 = el('span'); m2.append(el('div', 'nm', a.name), el('div', 'meta num', ok ? itemTag(a) + ' · ' + fmtDims(a) : 'does not fit'));
       const dlt = (a.price - it.price) * l.qty;
       const d = el('span', 'delta num' + (dlt > 0 ? ' up' : dlt < 0 ? ' down' : ''), a.id === it.id ? 'selected' : (dlt > 0 ? '+' : dlt < 0 ? '−' : '') + money(Math.abs(dlt)));
@@ -257,6 +264,7 @@
     card.hidden = !(cardOpen && l && is3d());
     if (card.hidden) return;
     const it = l.item;
+    const ph = $('#icPhoto'); ph.textContent = ''; ph.hidden = !it.img; if (it.img) photo(ph, it);
     $('#icName').textContent = it.name + (l.unit ? ', ' + l.qty + ' ' + l.unit : l.area ? ', ' + fmtArea(l.qty) : l.qty > 1 ? ' \u00d7 ' + l.qty : '');
     $('#icMeta').textContent = p.room.name + ' \u00b7 ' + fmtDims(it);
     $('#icPrice').textContent = money(it.price * l.qty);
@@ -361,7 +369,7 @@
     const lines = ['DRoom shopping list, ' + STYLES[state.style].name + ' style'];
     plans.forEach(p => {
       lines.push('', p.room.name + ' (' + fmtLen(p.room.W) + ' × ' + fmtLen(p.room.D) + ')');
-      p.lines.forEach(l => lines.push('- ' + l.item.name + (l.unit ? ', ' + l.qty + ' ' + l.unit : l.area ? ', ' + fmtArea(l.qty) : l.qty > 1 ? ' × ' + l.qty : '') + ', ' + fmtDims(l.item) + (boxesFor(l) ? ', ' + boxesFor(l) + ' boxes' : '') + ', ' + money(l.item.price * l.qty) + (l.item.store ? ', ' + l.item.supplier + (l.item.sku ? ' ' + l.item.sku : '') + (l.item.url ? ' ' + l.item.url : '') : '')));
+      p.lines.forEach(l => lines.push('- ' + l.item.name + (l.unit ? ', ' + l.qty + ' ' + l.unit : l.area ? ', ' + fmtArea(l.qty) : l.qty > 1 ? ' × ' + l.qty : '') + ', ' + fmtDims(l.item) + (boxesFor(l) ? ', ' + boxesFor(l) + boxWord(l, boxesFor(l)) : '') + ', ' + money(l.item.price * l.qty) + (l.item.store ? ', ' + l.item.supplier + (l.item.sku ? ' ' + l.item.sku : '') + (l.item.url ? ' ' + l.item.url : '') : '')));
     });
     lines.push('', 'Total: ' + money(plans.reduce((s, p) => s + p.total, 0)) + ' (budget ' + money(state.budget) + ')');
     const b = $('#btnCopy'), done = ok => { b.textContent = ok ? 'Copied' : 'Copy failed'; setTimeout(() => b.textContent = 'Copy list', 1600); };
