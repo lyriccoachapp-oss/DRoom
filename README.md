@@ -86,3 +86,10 @@ Scotia by N.S. Reg. 198/2024: ceiling height (9.5.3.1.), hallway width (9.5.4.1.
 placement (9.10.19.) and switched lighting (9.34.2.2.). Results appear on the Build tab with the article each comes
 from; smoke alarms are drawn on the Build drawing and counted in the takeoff. Values were read from the NRC's
 published code text and the Nova Scotia regulation. It is a design aid, not a permit review.
+
+## Project files and the PDF report
+
+**Save** writes the home to a `droom-project.json` file (rooms, style, budget, units, construction settings and the
+store products the plan uses); **Open** reads it back, on any computer, even without the store feeds. **PDF report**
+makes a letter-size PDF: summary, floor plan, a 3D view, the estimate by room with quantities, boxes, store and a
+link to each product, and the code check. `app/js/report.js`; jsPDF 2.5.1 is loaded from cdnjs on first use.

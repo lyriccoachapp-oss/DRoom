@@ -38,7 +38,8 @@ button{cursor:pointer}
 .brand b{color:var(--accent)}
 .logo{width:24px; height:24px; border:3px solid var(--ink); border-radius:6px; position:relative}
 .logo::after{content:""; position:absolute; left:4px; right:4px; bottom:-3px; height:9px; background:var(--accent); border-radius:2px 2px 0 0}
-.hist{margin-left:auto; display:flex; gap:8px}
+.hist{margin-left:auto; display:flex; gap:8px; flex-wrap:wrap}
+.projmsg{flex-basis:100%; text-align:right; font-size:12.5px; color:var(--muted); margin:0}
 .hist .btn{padding:6px 12px; background:var(--panel)}
 .btn:disabled{opacity:.45; cursor:default}
 .row select{flex:1; min-width:0; background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:6px 9px}
@@ -223,7 +224,7 @@ input[type=file]{max-width:100%; font-size:13px}
 <header class="top">
   <h1 class="brand"><span class="logo"></span><span><b>D</b>Room</span></h1>
   <span class="tag">preview · sample catalog, sample prices</span>
-  <span class="hist"><button type="button" class="btn" id="btnUndo" disabled>Undo</button><button type="button" class="btn" id="btnRedo" disabled>Redo</button></span>
+  <span class="hist"><button type="button" class="btn" id="btnOpen">Open</button><button type="button" class="btn" id="btnSave">Save</button><button type="button" class="btn primary" id="btnReport">PDF report</button><input type="file" id="projFile" accept=".json,application/json" hidden><button type="button" class="btn" id="btnUndo" disabled>Undo</button><button type="button" class="btn" id="btnRedo" disabled>Redo</button></span>
 </header>
 
 <main class="work">
@@ -385,4 +386,5 @@ input[type=file]{max-width:100%; font-size:13px}
 <script src="js/codecheck.js"></script>
 <script src="js/takeoff.js"></script>
 <script src="js/drawing.js"></script>
+<script src="js/report.js"></script>
 <script src="js/app.js"></script>

@@ -65,13 +65,18 @@ function rowFrom(hit, detail, wantKind) {
     if (unitText) row.store_unit = unitText.slice(0, 20);
     /* The search result's unit says how the product is measured, not what the price buys: The Home Depot US gives
        "sq. ft." with the price of a whole case or roll. So a known box coverage always wins. */
-    if (m.coverage_sqft) { row.price_unit = 'box'; row.price_per_sqft = Math.round(p / m.coverage_sqft * 100) / 100; }
+    /* The Canadian site names the unit ("case") whenever a price buys a box. A tile with no unit is priced by the piece
+       even when its title states the box coverage: 6 x 24 in at $4.28 is $4.28 a piece, not $4.28 for a 14.53 sq ft case. */
+    const loose = !unitText && m.width_in && (m.kind === 'tile' || m.kind === 'walltile') && !/mosaic|mesh|penny|sheet|pallet/i.test(title);
+    if (loose) { const a = m.width_in * m.length_in / 144; row.price_unit = 'piece'; row.price_unit_assumed = true; row.coverage_sqft = Math.round(a * 1000) / 1000; row.price_per_sqft = Math.round(p / a * 100) / 100; if (m.coverage_sqft) row.box_sqft = m.coverage_sqft; }
+    else if (m.coverage_sqft) { row.price_unit = 'box'; row.price_per_sqft = Math.round(p / m.coverage_sqft * 100) / 100; }
     /* Canadian results give no unit for single large tiles. Prices only line up across sizes of one tile when read per piece
        (12 x 24 in at $4.76 and 24 x 48 in at $23.10 are $2.38 and $2.89 a sq ft), so tile with no unit and no box coverage is
        taken as priced per piece, and marked so. */
     /* Mosaic is sold by the mesh sheet, and the size in its title is one chip: with no stated coverage a sheet is
-       taken as one square foot, and marked so. A chip of six by six inches or less is read the same way. */
-    else if (!m.coverage_sqft && (m.kind === 'tile' || m.kind === 'walltile') && (/mosaic|mesh|hexagon|penny|herringbone|chevron/i.test(title) || (m.width_in && m.width_in * m.length_in <= 36))) { row.price_unit = 'box'; row.coverage_sqft = 1; row.coverage_assumed = true; row.sheet = true; row.price_per_sqft = Math.round(p * 100) / 100; }
+       taken as one square foot, and marked so. Small tile that is not mosaic (3 x 6 in subway at $0.32) is sold by the
+       piece and falls to the rule below. */
+    else if (!m.coverage_sqft && (m.kind === 'tile' || m.kind === 'walltile') && /mosaic|mesh|penny|sheet/i.test(title)) { row.price_unit = 'box'; row.coverage_sqft = 1; row.coverage_assumed = true; row.sheet = true; row.price_per_sqft = Math.round(p * 100) / 100; }
     else if (!unitText && !m.coverage_sqft && m.width_in && (m.kind === 'tile' || m.kind === 'walltile')) { const a = m.width_in * m.length_in / 144; row.price_unit = 'piece'; row.price_unit_assumed = true; row.coverage_sqft = Math.round(a * 1000) / 1000; row.price_per_sqft = Math.round(p / a * 100) / 100; }
     /* Priced per tile or plank: one piece covers its own face. */
     else if (/^(each|ea|piece|pc|pcs|unit)\.?$/.test(unitText) && m.width_in && m.kind !== 'wallpaper') { const a = m.width_in * m.length_in / 144; row.price_unit = 'piece'; row.coverage_sqft = Math.round(a * 1000) / 1000; row.price_per_sqft = Math.round(p / a * 100) / 100; }

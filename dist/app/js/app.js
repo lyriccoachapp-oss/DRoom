@@ -295,6 +295,45 @@
     if (skipHistory !== true) record();
   }
 
+  /* ---------- project file and report ---------- */
+  const projMsg = text => { let m = $('#projMsg'); if (!m) { m = el('p', 'projmsg'); m.id = 'projMsg'; $('.hist').appendChild(m); } m.textContent = text || ''; m.hidden = !text; };
+  $('#btnSave').addEventListener('click', async () => {
+    const ok = await saveFile('droom-project.json', ProjectFile.toJSON(state, plans), 'application/json');
+    flash($('#btnSave'), ok, 'Save'); projMsg(ok ? 'Saved. Open the file here or on another computer to carry on.' : '');
+  });
+  $('#btnOpen').addEventListener('click', () => { $('#projFile').value = ''; $('#projFile').click(); });
+  $('#projFile').addEventListener('change', e => {
+    const f = e.target.files[0]; if (!f) return;
+    const fr = new FileReader();
+    fr.onload = () => {
+      try {
+        const p = ProjectFile.parse(String(fr.result)), n = Stores.ensure(p.products);
+        Object.assign(state, p.home); if (!p.home.build) delete state.build; state.roomId = state.rooms[0].id; sel = null;
+        UNITS.v = state.units; Stores.save(localStorage); renderStores(); PlanEditor.refit(); update();
+        projMsg('Opened ' + f.name + ' (' + state.rooms.length + ' rooms' + (n ? ', ' + n + ' store products' : '') + ').');
+      } catch (err) { projMsg(err.message); }
+    };
+    fr.onerror = () => projMsg('Could not read the file.'); fr.readAsText(f);
+  });
+  /* The report takes a 3D view: from the 3D or Walk tab as it is, else from a short visit to the 3D tab. */
+  async function view3d() {
+    if (!has3d || !plans.length) return null;
+    if (is3d()) return Scene3D.snapshot();
+    const back = state.view; $('#segView button[data-v=orbit]').click();
+    await new Promise(r => setTimeout(r, 2600));
+    const shot = Scene3D.snapshot(); $('#segView button[data-v=' + back + ']').click(); return shot;
+  }
+  $('#btnReport').addEventListener('click', async () => {
+    const b = $('#btnReport'); if (b.disabled) return; if (!plans.length) { projMsg('Add rooms first.'); return; }
+    b.disabled = true; b.textContent = 'Making PDF…'; projMsg('');
+    try {
+      const shot = await view3d(), date = today();
+      const pdf = await Report.build({ plans, state, takeoff: takeoff(plans, state.build), checks: codeCheck(plans, buildOpts(state.build)), view3d: shot, date });
+      const ok = await saveFile('droom-report-' + date + '.pdf', pdf, 'application/pdf');
+      projMsg(ok ? 'Report saved.' : 'The report was not saved.');
+    } catch (err) { projMsg(err.message || 'The report could not be made.'); }
+    b.disabled = false; b.textContent = 'PDF report';
+  });
   const altFilter = {};
   /* ---------- stores ---------- */
   let storeTarget = null, storeMsg = '';
