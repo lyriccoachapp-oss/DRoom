@@ -38,6 +38,8 @@ const round = (v, n) => Math.round(v * Math.pow(10, n)) / Math.pow(10, n);
 function kindOf(title, specs) {
   const t = ' ' + String(title || '').toLowerCase() + ' ', all = t + ' ' + specs.map(s => s.name + ' ' + s.value).join(' ').toLowerCase();
   if (/grout|adhesive|mortar|thinset|underlay|trim|transition|moulding|molding|sealer|cleaner|spacer|primer|brush|roller|sample/.test(t)) return null;
+  /* Shower and tub wall kits are panels, not tile. */
+  if (/\bkit\b|surround|wall panel|shower wall|backer ?board/.test(t)) return null;
   if (/wall ?paper|wall ?covering|wall mural/.test(t)) return 'wallpaper';
   if (/\bpaint\b/.test(t) && !/spray|marker|pen\b/.test(t)) return 'paint';
   if (/\btiles?\b|mosaic|porcelain|ceramic/.test(t)) {

@@ -156,3 +156,11 @@ test('Canadian rows take missing specifications from the same model on the US si
   assert.deepStrictEqual({ c: r.rows[1].coverage_sqft, a: r.rows[1].coverage_assumed, s: r.rows[1].price_per_sqft }, { c: 56, a: undefined, s: 1 });
   assert.strictEqual(r.rows[2], ca[2]);
 });
+
+test('mosaic is priced by the sheet, and shower wall kits are not tile', () => {
+  const m = rowFrom({ product_id: 'M1', title: '1.5-inch x 4-inch Sabbia Bianco Herringbone Polished Marble Mosaic Tile', price: 18.88 }, null, 'tile');
+  assert.deepStrictEqual({ c: m.coverage_sqft, a: m.coverage_assumed, s: m.price_per_sqft, sh: m.sheet }, { c: 1, a: true, s: 18.88, sh: true });
+  const stated = rowFrom({ product_id: 'M2', title: 'La Fleur 9.92-inch x 8.9-inch Polished Marble Mesh-Mounted Mosaic Tile (6.2 sq. ft./case)', price: 467.98, unit: 'case' }, null, 'tile');
+  assert.ok(stated.coverage_sqft === 6.2 && !stated.coverage_assumed, 'a stated coverage wins over the sheet rule');
+  assert.strictEqual(rowFrom({ product_id: 'K1', title: 'Versaline 48L x 36W x 72H-inch 4-Panel Alcove Shower Wall Kit in Glossy White Subway Tile', price: 886 }, null, 'walltile'), null);
+});
