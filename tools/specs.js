@@ -40,6 +40,8 @@ function kindOf(title, specs) {
   if (/grout|adhesive|mortar|thinset|underlay|trim|transition|moulding|molding|sealer|cleaner|spacer|primer|brush|roller|sample/.test(t)) return null;
   /* Shower and tub wall kits are panels, not tile. */
   if (/\bkit\b|surround|wall panel|shower wall|backer ?board/.test(t)) return null;
+  /* Sold by the pallet, hundreds of square feet at a time: not a room's worth. */
+  if (/pallet/.test(t)) return null;
   if (/wall ?paper|wall ?covering|wall mural/.test(t)) return 'wallpaper';
   if (/\bpaint\b/.test(t) && !/spray|marker|pen\b/.test(t)) return 'paint';
   if (/\btiles?\b|mosaic|porcelain|ceramic/.test(t)) {

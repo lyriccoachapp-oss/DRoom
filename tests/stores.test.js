@@ -117,3 +117,39 @@ test('L-shaped sofas take an L-shaped size, and colours of one model count as on
   assert.strictEqual(p.placed.filter(q => q.part).length, 1);
   run('Stores.reset()');
 });
+
+test('a project file brings back the home and the store products it uses', () => {
+  for (const f of ['report.js']) vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'app', 'js', f), 'utf8'), ctx, { filename: f });
+  run('Stores.reset()');
+  call('Stores.importFeed(Stores.add("Sample Store"), Stores.SAMPLE)');
+  const living = room('living'); living.overrides.sofa = 's:samplestore:NF-1002';
+  ctx.__state = { style: 'modern', budget: 9000, units: 'm', rooms: [living, room('bedroom')], view: 'walk', roomId: 'x' };
+  const text = run('ProjectFile.toJSON(__state, __state.rooms.map(r => planRoom(r, __state.style, 4500, [], __state.rooms)))');
+  const j = JSON.parse(text);
+  assert.strictEqual(j.format, 'droom-project');
+  assert.ok(!('view' in j.home) && !('roomId' in j.home), 'only the home is saved, not where the viewer was');
+  assert.ok(j.products.some(p => p.id === 's:samplestore:NF-1002'), 'the hand-picked sofa travels with the project');
+  /* another computer: no feeds at all */
+  run('Stores.reset()');
+  ctx.__text = text;
+  const p = run('ProjectFile.parse(__text)');
+  assert.strictEqual(p.home.style, 'modern'); assert.strictEqual(p.home.rooms.length, 2);
+  assert.ok(run('Stores.ensure(ProjectFile.parse(__text).products)') >= 1);
+  const plan = call('planRoom(__a, "modern", 4500)', p.home.rooms[0]);
+  assert.strictEqual(plan.lines.find(l => l.cat === 'sofa').item.id, 's:samplestore:NF-1002', 'the plan comes back with the same sofa');
+  assert.strictEqual(run('Stores.ensure(ProjectFile.parse(__text).products)'), 0, 'opening twice adds nothing');
+  for (const bad of ['not json', '{"format":"other"}', JSON.stringify({ format: 'droom-project', version: 1, home: { rooms: [{ type: 'garage', W: 3, D: 3, x: 0, y: 0 }] } })])
+    assert.throws(() => { ctx.__text = bad; run('ProjectFile.parse(__text)'); });
+  run('Stores.reset()');
+});
+
+test('the estimate rows carry quantities, boxes and links, and PDF text stays in Latin-1', () => {
+  run('Stores.reset()');
+  call('Stores.importFeed("homedepot", __a)', JSON.stringify({ products: [{ sku: 'F1', name: 'Oak plank', droom_category: 'floor', price: 50, price_unit: 'box', coverage_sqft: 20, url: 'https://example.com/f1' }] }));
+  const rows = call('Report.rows([planRoom(__a, "scandi", 20000)])', room('living'));
+  const fl = rows.find(r => r.name === 'Oak plank');
+  assert.ok(fl && fl.url === 'https://example.com/f1' && /\(\d+ boxes\)$/.test(fl.qty) && fl.store === 'The Home Depot', JSON.stringify(fl));
+  assert.ok(rows.some(r => r.store === 'Sample catalog' && r.url === null));
+  assert.strictEqual(run('Report.pdfText("Sofa “Linden”, 7′6″ × 3′ · 2 m² ✓")'), 'Sofa "Linden", 7\'6" × 3\' - 2 m² OK');
+  run('Stores.reset()');
+});

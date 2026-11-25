@@ -110,7 +110,7 @@ test('Home Depot Canada titles give the box coverage and the face size, not the 
   assert.deepStrictEqual({ k: m.kind, w: m.width_in, l: m.length_in, c: m.coverage_sqft }, { k: 'floor', w: 7.5, l: 47.6, c: 19.8 });
   const t = parseMaterial('Kingston Sand 3 in. x 8 in. Polished Ceramic Wall Tile (5.38 Sq. Ft. / Case)', []);
   assert.deepStrictEqual({ k: t.kind, w: t.width_in, l: t.length_in, c: t.coverage_sqft }, { k: 'walltile', w: 3, l: 8, c: 5.38 });
-  const row = rowFrom({ product_id: 'C1', title: '12-inch x 24-inch Carrara Porcelain Floor & Wall Tile(15.5 sq.ft. / case)', price: 36.27 }, null, 'tile');
+  const row = rowFrom({ product_id: 'C1', title: '12-inch x 24-inch Carrara Porcelain Floor & Wall Tile(15.5 sq.ft. / case)', price: 36.27, unit: 'case' }, null, 'tile');
   assert.deepStrictEqual({ u: row.price_unit, s: row.price_per_sqft, w: row.tile_width_in, l: row.tile_length_in }, { u: 'box', s: 2.34, w: 12, l: 24 });
   const paper = rowFrom({ product_id: 'P1', title: 'Lykke Blue Wallpaper', price: 64.98 }, null, 'wallpaper');
   assert.deepStrictEqual({ c: paper.coverage_sqft, a: paper.coverage_assumed, s: paper.price_per_sqft }, { c: 28, a: true, s: 2.32 });
@@ -159,8 +159,18 @@ test('Canadian rows take missing specifications from the same model on the US si
 
 test('mosaic is priced by the sheet, and shower wall kits are not tile', () => {
   const m = rowFrom({ product_id: 'M1', title: '1.5-inch x 4-inch Sabbia Bianco Herringbone Polished Marble Mosaic Tile', price: 18.88 }, null, 'tile');
+  const sub = rowFrom({ product_id: 'S1', title: '3-inch x 6-inch Metro White Gloss Wall Tile', price: 0.32 }, null, 'walltile');
+  assert.deepStrictEqual({ u: sub.price_unit, s: sub.price_per_sqft }, { u: 'piece', s: 2.56 }, 'small subway tile is sold by the piece');
   assert.deepStrictEqual({ c: m.coverage_sqft, a: m.coverage_assumed, s: m.price_per_sqft, sh: m.sheet }, { c: 1, a: true, s: 18.88, sh: true });
   const stated = rowFrom({ product_id: 'M2', title: 'La Fleur 9.92-inch x 8.9-inch Polished Marble Mesh-Mounted Mosaic Tile (6.2 sq. ft./case)', price: 467.98, unit: 'case' }, null, 'tile');
   assert.ok(stated.coverage_sqft === 6.2 && !stated.coverage_assumed, 'a stated coverage wins over the sheet rule');
+  assert.strictEqual(rowFrom({ product_id: 'P1', title: 'Capistrano Fusion 3.25-inch x 6.5-inch Matte Porcelain Tile (817.81 sq. ft./pallet)', price: 273.6 }, null, 'tile'), null, 'pallets stay out');
   assert.strictEqual(rowFrom({ product_id: 'K1', title: 'Versaline 48L x 36W x 72H-inch 4-Panel Alcove Shower Wall Kit in Glossy White Subway Tile', price: 886 }, null, 'walltile'), null);
+});
+
+test('Canadian tile with no unit is priced by the piece even when the title states the box coverage', () => {
+  const r = rowFrom({ product_id: 'MB', title: 'Montagna Rustic Bay 6-inch x 24-inch Glazed Porcelain Floor and Wall Tile (14.53 sq. ft. / case)', price: 4.28 }, null, 'tile');
+  assert.deepStrictEqual({ u: r.price_unit, s: r.price_per_sqft, b: r.box_sqft, a: r.price_unit_assumed }, { u: 'piece', s: 4.28, b: 14.53, a: true });
+  const cased = rowFrom({ product_id: 'KC', title: '12-inch x 24-inch Carrara Porcelain Tile (15.5 sq.ft. / case)', price: 36.27, unit: 'case' }, null, 'tile');
+  assert.deepStrictEqual({ u: cased.price_unit, s: cased.price_per_sqft }, { u: 'box', s: 2.34 }, 'a stated case unit still prices the case');
 });

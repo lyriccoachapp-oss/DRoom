@@ -235,7 +235,19 @@ const Stores = (function () {
     'NF-1110,Area rug 5 x 7,Rugs,169,84,60,0.5,in,beige,,\nNF-1120,Bath vanity 36 in,Vanities,459,36,20,34,in,white,,\n';
 
   reset();
-  return { parseFeed, toItem, mapCategory, slotOf, importFeed, clear, remove, add, setEnabled, list, linkOf, pick, styled, save, load, reset, TEMPLATE, SAMPLE };
+  /* Products a project file brings along: each joins its store (a store the browser does not have yet is added by name)
+     unless a feed already supplies it. Returns how many were added. */
+  function ensure(list) {
+    let n = 0;
+    (list || []).forEach(p => {
+      if (!p || typeof p.id !== 'string' || !p.store || !CATS[p.cat] || !(p.price > 0) || !CATS[p.cat].sizes[p.si] || !STYLES[p.style] || !(p.tier >= 0 && p.tier < 3)) return;
+      if (products.some(q => q.id === p.id)) return;
+      if (!stores[p.store]) stores[p.store] = { id: String(p.store).slice(0, 24), name: String(p.supplier || p.store).slice(0, 40), enabled: true, dimUnit: 'in', custom: true };
+      products.push(Object.assign({}, p, { url: safeUrl(p.url), img: safeUrl(p.img), supplier: stores[p.store].name }, paletteOf(p.cat, p.style, p.tier, p.color))); n++;
+    });
+    sync(); return n;
+  }
+  return { ensure, parseFeed, toItem, mapCategory, slotOf, importFeed, clear, remove, add, setEnabled, list, linkOf, pick, styled, save, load, reset, TEMPLATE, SAMPLE };
 })();
 /* A short label for where an item comes from: the store, or the sample style and price tier. */
 function itemTag(it) { return it.store ? it.supplier + (it.currency ? ' \u00b7 prices in ' + it.currency : '') : STYLES[it.style].name + ' · ' + TIERS[it.tier].name; }
