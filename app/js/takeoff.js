@@ -106,6 +106,8 @@ function electricalPlan(plans, H) {
     e.rooms.push({ name: o.name, rec, lights });
   });
   if (!e.smoke && plans.length) e.smoke = 1;
+  /* Where the code check is loaded, smoke alarms follow its placement (NBC 9.10.19.3.). */
+  if (typeof smokeAlarms === 'function') e.smoke = smokeAlarms(plans).length;
   const circuits = Math.max(1, Math.ceil(general / RULES.perCircuit));
   e.c15 += circuits + 1;                                                // general circuits plus one for the smoke alarms
   e.w142 += circuits * (plans.length ? runs / plans.length : 0);

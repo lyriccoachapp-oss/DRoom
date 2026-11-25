@@ -73,6 +73,12 @@ const BuildDrawing = (function () {
       el('rect', { x: px - 16, y: py - 16, width: 32, height: 32, fill: pal.power, stroke: pal.ink, 'stroke-width': 2 }, svg);
       txt(px, py + 5, 'P', 15, { 'font-weight': 700 });
     }
+    /* smoke alarms where NBC 9.10.19.3. puts them */
+    if (typeof smokeAlarms === 'function') smokeAlarms(plans).forEach(a => {
+      const x = a.p[0] * S, y = a.p[1] * S - 46;
+      el('circle', { cx: x, cy: y, r: 13, fill: pal.paper, stroke: pal.ink, 'stroke-width': 2 }, svg);
+      txt(x, y + 4, 'SA', 11, { 'font-weight': 700 });
+    });
     /* room labels */
     plans.forEach(pl => {
       const o = pl.room, q = maxRects(pl.r)[0], cx = (o.x + (q.x0 + q.x1) / 2) * S, cy = (o.y + (q.z0 + q.z1) / 2) * S, f = clamp(Math.min(q.x1 - q.x0, q.z1 - q.z0) * S * 0.085, 13, 25);
@@ -95,7 +101,7 @@ const BuildDrawing = (function () {
     el('rect', { x: tx, y: ty, width: tw, height: 110, fill: 'none', stroke: pal.ink, 'stroke-width': 2 }, svg);
     txt(tx + 14, ty + 34, 'FLOOR PLAN', 24, { 'text-anchor': 'start', 'font-weight': 700 });
     txt(tx + 14, ty + 60, plans.length + (plans.length === 1 ? ' room' : ' rooms') + ' · ' + fmtArea(t.area) + ' · walls ' + t.opt.height + ' ft · studs at ' + t.opt.spacing + ' in', 15, { 'text-anchor': 'start', fill: pal.muted });
-    txt(tx + 14, ty + 86, 'Outside walls ' + fmtLen(t.ext) + ' · inside walls ' + fmtLen(t.int) + ' · dashed blue: drains · P: electrical panel', 13, { 'text-anchor': 'start', fill: pal.muted });
+    txt(tx + 14, ty + 86, 'Outside walls ' + fmtLen(t.ext) + ' · inside walls ' + fmtLen(t.int) + ' · dashed blue: drains · P: electrical panel · SA: smoke alarm', 13, { 'text-anchor': 'start', fill: pal.muted });
     txt(tx + tw - 14, ty + 34, 'DRoom', 20, { 'text-anchor': 'end', 'font-weight': 700 });
     txt(tx + tw - 14, ty + 60, date || '', 14, { 'text-anchor': 'end', fill: pal.muted });
     txt(tx + tw - 14, ty + 86, 'Preliminary. Not for construction.', 13, { 'text-anchor': 'end', fill: pal.muted });

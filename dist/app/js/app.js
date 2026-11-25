@@ -146,6 +146,16 @@
     BuildDrawing.draw($('#drawing'), plans, t, null, today());
     const box = $('#buildList'); box.textContent = '';
     $('#buildSum').textContent = plans.length ? 'Outside walls ' + fmtLen(t.ext) + ' \u00b7 inside walls ' + fmtLen(t.int) + ' \u00b7 floor ' + fmtArea(t.area) : 'Add rooms on the Plan tab.';
+    /* Code check: failures first, then warnings, passes and notes. */
+    const cc = codeCheck(plans, buildOpts(state.build)), order = { fail: 0, warn: 1, pass: 2, info: 3 }, n = s => cc.filter(x => x.status === s).length;
+    $('#codeSum').textContent = !plans.length ? 'Add rooms on the Plan tab.' : CODE.short + ': ' + n('fail') + ' to fix, ' + n('warn') + ' to confirm, ' + n('pass') + ' met.';
+    $('#codeSum').classList.toggle('over', n('fail') > 0);
+    const cl = $('#codeList'); cl.textContent = '';
+    cc.slice().sort((a, b) => order[a.status] - order[b.status]).forEach(x => {
+      const li = el('li', 'cc-' + x.status), m = el('span', 'mark', { fail: '!', warn: '?', pass: '\u2713', info: 'i' }[x.status]), b = el('div'), t = el('div', 't', x.title + (x.room ? ' \u00b7 ' + x.room : ''));
+      t.appendChild(el('span', 'ref', ' \u00b7 ' + x.ref)); b.append(t, el('div', 'd', x.detail)); li.append(m, b); cl.appendChild(li);
+    });
+    $('#codeNote').textContent = CODE.name + '. ' + CODE_NOT_CHECKED + ' This is a design aid, not a permit review.';
     t.groups.forEach(g => {
       const d = el('div', 'rgroup'); d.appendChild(el('div', 'rhead', g.title));
       if (!g.lines.length) d.appendChild(el('p', 'note', g.empty || 'Nothing to list yet.'));

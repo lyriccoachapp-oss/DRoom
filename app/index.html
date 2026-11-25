@@ -205,6 +205,12 @@ input[type=file]{max-width:100%; font-size:13px}
 .out li{display:flex; justify-content:space-between; gap:10px; align-items:baseline}
 .item.tk{display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; align-items:center; padding:8px 10px}
 .toast{font-size:12.5px; color:var(--warn); margin:0}
+.codelist{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px}
+.codelist li{display:grid; grid-template-columns:22px minmax(0,1fr); gap:8px; padding:8px 10px; border-radius:10px; background:var(--bg); border:1px solid var(--line); font-size:12.5px}
+.codelist .mark{width:20px; height:20px; border-radius:50%; display:grid; place-items:center; font-weight:800; font-size:12px; color:#fff}
+.codelist .cc-fail .mark{background:var(--warn)} .codelist .cc-warn .mark{background:#C98A1B} .codelist .cc-pass .mark{background:var(--good)} .codelist .cc-info .mark{background:var(--muted)}
+.codelist .t{font-weight:700} .codelist .ref{color:var(--muted); font-weight:500}
+.codelist .d{color:var(--muted); margin-top:2px}
 
 @media (max-width:1040px){
   html,body{height:auto}
@@ -341,6 +347,12 @@ input[type=file]{max-width:100%; font-size:13px}
         <p class="status" id="buildSum"></p>
         <div class="btnrow"><button type="button" class="btn" id="btnBuildCopy">Copy list</button><button type="button" class="btn" id="btnBuildCsv">Save as CSV</button><button type="button" class="btn" id="btnBuildSvg">Save drawing</button></div>
       </div>
+      <div class="grp" id="codeGrp">
+        <h2>Code check</h2>
+        <p class="status" id="codeSum"></p>
+        <ul class="codelist" id="codeList"></ul>
+        <p class="note" id="codeNote"></p>
+      </div>
       <div id="buildList" class="grp"></div>
       <p class="note">Quantities are budgeting estimates from rules of thumb, with waste included. They are not an engineered or code-checked design: framing, foundations, plumbing and wiring must be designed and inspected to your local codes.</p>
     </div>
@@ -370,6 +382,7 @@ input[type=file]{max-width:100%; font-size:13px}
 <script src="js/scene.js"></script>
 <script src="js/editor.js"></script>
 <script src="js/recognize.js"></script>
+<script src="js/codecheck.js"></script>
 <script src="js/takeoff.js"></script>
 <script src="js/drawing.js"></script>
 <script src="js/app.js"></script>
