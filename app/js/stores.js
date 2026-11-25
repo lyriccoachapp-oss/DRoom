@@ -6,7 +6,8 @@ const Stores = (function () {
   const KEY = 'droom.stores.v1', MAX = 4000;
   const BUILTIN = {
     ikea: { name: 'IKEA', search: 'https://www.ikea.com/ca/en/search/?q=', dimUnit: 'cm' },
-    homedepot: { name: 'The Home Depot', search: 'https://www.homedepot.ca/search?q=', dimUnit: 'in' }
+    homedepot: { name: 'The Home Depot', search: 'https://www.homedepot.ca/search?q=', dimUnit: 'in' },
+    homedepotus: { name: 'The Home Depot US', search: 'https://www.homedepot.com/s/', dimUnit: 'in', currency: 'USD', enabled: false }
   };
   let stores = {}, products = [];
   function reset() {
@@ -123,6 +124,8 @@ const Stores = (function () {
     if (cat === 'cabrun' || cat === 'uppers') return { skip: 'cabinet runs are not imported yet' };
     const C = CATS[cat], sku = String(get('sku') || name).slice(0, 60);
     const it = { id: 's:' + store.id + ':' + sku, store: store.id, supplier: store.name, sku, cat, name, url: safeUrl(get('url')), img: safeUrl(get('image')) };
+    /* Prices are shown as they are quoted; a store in another currency says so next to each price. */
+    if (store.currency) it.currency = store.currency;
     if (C.area) {
       /* Flooring and tile are priced per square metre; feeds quote a square foot or a box. */
       const per = num(get('perSqft')), cov = num(get('coverage')), pu = String(get('priceUnit')).toLowerCase();
@@ -235,4 +238,4 @@ const Stores = (function () {
   return { parseFeed, toItem, mapCategory, slotOf, importFeed, clear, remove, add, setEnabled, list, linkOf, pick, styled, save, load, reset, TEMPLATE, SAMPLE };
 })();
 /* A short label for where an item comes from: the store, or the sample style and price tier. */
-function itemTag(it) { return it.store ? it.supplier : STYLES[it.style].name + ' · ' + TIERS[it.tier].name; }
+function itemTag(it) { return it.store ? it.supplier + (it.currency ? ' \u00b7 prices in ' + it.currency : '') : STYLES[it.style].name + ' · ' + TIERS[it.tier].name; }

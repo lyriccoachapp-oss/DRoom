@@ -69,3 +69,11 @@ node tools/collect-ikea.js --kinds sofa,bed,wardrobe --limit 40 --images catalog
 
 Import `catalog/ikea.json` in the planner under Stores, IKEA. Products larger than the sizes the planner lays out are
 left out on import until the layout takes real product dimensions.
+
+### Running the Home Depot collector on GitHub
+
+The `collect catalog` workflow (Actions tab, run by hand) runs the collector with the repository secret `SERPAPI_KEY`
+and prints the feed into the run log as well as attaching it. Canada (`ca`) gives prices in CAD with sizes and box
+coverage read from titles; the US site (`us`) adds full specifications. `tools/merge-homedepot.js` fills Canadian rows
+with the specifications of the same model on the US site. In the planner, The Home Depot takes the Canadian feed and
+The Home Depot US (off by default, prices in USD) the US feed.
