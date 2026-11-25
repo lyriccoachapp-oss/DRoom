@@ -319,3 +319,47 @@ test('a wall finish adds tile or wallpaper for every wall or for one accent wall
   assert.ok(Math.abs(w.qty - Math.ceil(2.4 * 2.7 * 1.1 * 10) / 10) < 1e-9);
   assert.ok(!go({ wallFinish: 'sofa' }).lines.some(l => l.wall), 'only wall finishes count');
 });
+
+test('code check: NBC 2020 Part 9 as adopted in Nova Scotia', () => {
+  for (const f of ['codecheck.js', 'takeoff.js']) if (f === 'codecheck.js' || run('typeof takeoff') !== 'function') vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'app', 'js', f), 'utf8'), ctx, { filename: f });
+  const R = (id, type, x, y, W, D, doorWall, doorPos, winWall, extra) => Object.assign({ id, name: id, type, x, y, W, D, doorWall, doorPos, winWall, winPos: 0.5, overrides: {}, removed: [] }, extra || {});
+  /* the sample home: living, hallway, bedroom, bathroom, kitchen */
+  const home = () => [R('Living', 'living', 0, 0, 5.4, 4.2, 'E', 0.7, 'N'), R('Hall', 'hall', 5.4, 0, 1.4, 5.8, 'S', 0.5, 'N'),
+    R('Bed', 'bedroom', 6.8, 0, 4.0, 3.6, 'W', 0.5, 'N'), R('Bath', 'bathroom', 6.8, 3.6, 2.4, 2.2, 'W', 0.5, 'E'), R('Kitchen', 'kitchen', 0, 4.2, 3.8, 3.2, 'N', 0.82, 'S')];
+  const check = (rooms, opts) => { ctx.__rooms = rooms; ctx.__o = opts || {}; return JSON.parse(run('(() => { const plans = __rooms.map(r => planRoom(r, "scandi", 1e6, [], __rooms)); return JSON.stringify({ res: codeCheck(plans, __o), sa: smokeAlarms(plans), smoke: takeoff(plans, __o).electrical.smoke }); })()')); };
+  const by = (res, title, room) => res.filter(x => x.title === title && (room === undefined || x.room === room));
+
+  let c = check(home());
+  assert.deepStrictEqual(by(c.res, 'Ceiling height').map(x => x.status), ['pass']);
+  assert.deepStrictEqual(by(c.res, 'Hallway width', 'Hall').map(x => x.status), ['pass'], '1.4 m hallway');
+  assert.deepStrictEqual(by(c.res, 'Entrance door').map(x => x.status), ['pass'], 'the hall door opens to the outside at 810 mm');
+  assert.deepStrictEqual(by(c.res, 'Bedroom egress', 'Bed').map(x => x.status), ['pass']);
+  assert.deepStrictEqual(by(c.res, 'Plumbing fixtures').map(x => x.status), ['pass']);
+  assert.strictEqual(c.res.filter(x => x.status === 'fail').length, 0, JSON.stringify(c.res.filter(x => x.status === 'fail')));
+  assert.deepStrictEqual(c.sa.map(a => a.where).sort(), ['Bed', 'Hall'], 'one in the bedroom, one in the hallway serving it');
+  assert.strictEqual(c.smoke, 2, 'the takeoff counts the same alarms');
+
+  const narrow = home(); narrow[1].W = 0.8;
+  assert.deepStrictEqual(by(check(narrow).res, 'Hallway width', 'Hall').map(x => x.status), ['warn'], '800 mm: allowed only in the narrow case');
+  narrow[1].W = 0.65;
+  assert.deepStrictEqual(by(check(narrow).res, 'Hallway width', 'Hall').map(x => x.status), ['fail']);
+
+  const door = home(); door[2].doorWidth = 0.71;
+  assert.deepStrictEqual(by(check(door).res, 'Doorway width', 'Bed').map(x => x.status), ['fail'], 'a 28 in bedroom door is under 760 mm');
+  const bath = home(); bath[3].doorWidth = 0.71;
+  const bc = check(bath).res;
+  assert.strictEqual(by(bc, 'Doorway width', 'Bath').length, 0, '710 mm is enough for a bathroom (610 mm)');
+  assert.deepStrictEqual(by(bc, 'Bathroom door').map(x => x.status), ['fail'], 'but one bathroom off a wide hallway must take 760 mm');
+  const ent = home(); ent[1].doorWidth = 0.76;
+  assert.deepStrictEqual(by(check(ent).res, 'Entrance door').map(x => x.status), ['fail']);
+
+  /* a bedroom whose only window looks into the hallway */
+  const inner = home(); inner[2].winWall = 'W'; inner[2].doorWall = 'S'; inner[2].winPos = 0.3;
+  assert.deepStrictEqual(by(check(inner).res, 'Bedroom egress', 'Bed').map(x => x.status), ['fail']);
+
+  const nobath = home().filter(r => r.type !== 'bathroom');
+  const nb = by(check(nobath).res, 'Plumbing fixtures')[0];
+  assert.strictEqual(nb.status, 'fail'); assert.match(nb.detail, /lavatory.*bathtub or shower.*water closet/);
+  assert.strictEqual(check([], {}).res.length, 0);
+  assert.deepStrictEqual(by(check(home(), { height: 8 }).res, 'Ceiling height').map(x => x.status), ['pass']);
+});

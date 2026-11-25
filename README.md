@@ -77,3 +77,12 @@ and prints the feed into the run log as well as attaching it. Canada (`ca`) give
 coverage read from titles; the US site (`us`) adds full specifications. `tools/merge-homedepot.js` fills Canadian rows
 with the specifications of the same model on the US site. In the planner, The Home Depot takes the Canadian feed and
 The Home Depot US (off by default, prices in USD) the US feed.
+
+## Code check
+
+`app/js/codecheck.js` checks the plan against the National Building Code of Canada 2020, Part 9, as adopted in Nova
+Scotia by N.S. Reg. 198/2024: ceiling height (9.5.3.1.), hallway width (9.5.4.1.), doorway widths (Table 9.5.5.1.,
+9.5.5.3.), bedroom egress (9.9.10.1.), required plumbing fixtures (9.31.4.1. as amended in Nova Scotia), smoke alarm
+placement (9.10.19.) and switched lighting (9.34.2.2.). Results appear on the Build tab with the article each comes
+from; smoke alarms are drawn on the Build drawing and counted in the takeoff. Values were read from the NRC's
+published code text and the Nova Scotia regulation. It is a design aid, not a permit review.
