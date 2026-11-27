@@ -166,6 +166,7 @@ const Scene3D = (function () {
       pl.placed.forEach(q => {
         const it = byCat[q.cat]; if (!it) return;
         const fg = new THREE.Group(); if (q.part) BUILD.sofaPart(fg, it, q); else BUILD[it.cat](fg, it);
+        if (it.model3d && !q.part && !it.ext) swapInModel(fg, it);
         fg.position.set(o.x + q.cx, Y, o.y + q.cz); fg.rotation.y = q.rot; fg.userData = { roomId: o.id, cat: q.cat };
         T.furnG.add(fg);
       });
@@ -184,6 +185,31 @@ const Scene3D = (function () {
   }
   /* A straight flight: solid steps from the bottom landing to the floor above, and a handrail on the open side.
      It uses the same number of risers as the plan, scaled to the 3D storey height. */
+  /* Product 3D models (GLB), made from a store photo by the 3D converter. The drawn stand-in shows at once; the model
+     replaces it when it has loaded, stretched to the product's own width, depth and height and stood on the floor. */
+  const GLTF_JS = 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js';
+  let gltfReady = null; const modelCache = {};
+  function loadGltfLib() {
+    if (THREE.GLTFLoader) return Promise.resolve();
+    return gltfReady || (gltfReady = new Promise((res, rej) => { const s = document.createElement('script'); s.src = GLTF_JS; s.onload = () => THREE.GLTFLoader ? res() : rej(new Error('GLTFLoader missing')); s.onerror = () => { gltfReady = null; rej(new Error('GLTFLoader did not load')); }; document.head.appendChild(s); }));
+  }
+  function loadModel(url) {
+    return modelCache[url] || (modelCache[url] = loadGltfLib().then(() => new Promise((res, rej) => new THREE.GLTFLoader().load(url, g => res(g.scene), undefined, rej))).catch(e => { delete modelCache[url]; throw e; }));
+  }
+  function swapInModel(fg, it) {
+    loadModel(it.model3d).then(src => {
+      if (!fg.parent) return;
+      const m = src.clone(true); m.rotation.y = it.model3dRot || 0;
+      const box = new THREE.Box3().setFromObject(m), size = box.getSize(new THREE.Vector3());
+      if (!(size.x > 0 && size.y > 0 && size.z > 0)) return;
+      m.scale.set(it.w / size.x, it.h / size.y, it.d / size.z);
+      const b2 = new THREE.Box3().setFromObject(m), c = b2.getCenter(new THREE.Vector3());
+      m.position.set(m.position.x - c.x, m.position.y - b2.min.y, m.position.z - c.z);
+      m.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+      while (fg.children.length) fg.remove(fg.children[0]);
+      fg.add(m); fg.userData.model = true; if (T) T.dirty = true;
+    }).catch(() => {});
+  }
   function buildStair(g, o, S) {
     const s = stairOf(o), rise = FH / s.n, wood = M(S.wood[1], 0.7), rail = M(S.metal, 0.5);
     for (let i = 0; i < s.n - 1; i++) {

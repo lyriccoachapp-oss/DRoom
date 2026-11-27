@@ -104,3 +104,11 @@ storey height (wall height plus 0.3 m), with a bottom landing at the door end. T
 steps, flight height, headroom, the landing at the top, doorways to stairs (810 mm), doors that open to nowhere on an
 upper floor, and stairs to every upper floor. The takeoff puts the foundation and slab under the ground floor only and
 adds floor framing and stairs.
+
+## Product 3D models
+
+A feed row may carry `model3d` (or `glb`): an https address of a .glb file, or a .glb published beside the app
+(`models/name.glb`), with an optional `model3d_rot` in degrees. In the 3D and Walk views the drawn stand-in shows
+first and the model replaces it once loaded, scaled to the product's width, depth and height (GLTFLoader from three.js
+0.128.0 on jsDelivr, loaded on first use). Models can be made from a product photo with an image-to-3D service; keep
+textures near 1024 px so a model stays around 3 MB.

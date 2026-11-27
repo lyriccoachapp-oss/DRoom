@@ -15,7 +15,7 @@ const ProjectFile = (function () {
       Object.values(pl.room.overrides || {}).forEach(id => { const it = BYID[id]; if (it && it.store) out.set(id, it); });
     });
     return [...out.values()].map(it => {
-      const o = {}; ['id', 'store', 'supplier', 'sku', 'cat', 'name', 'url', 'img', 'price', 'si', 'w', 'd', 'h', 'tier', 'style', 'anyStyle', 'color', 'tw', 'tl', 'cover', 'perPiece', 'currency', 'ext', 'group', 'variant'].forEach(k => { if (it[k] !== undefined) o[k] = it[k]; });
+      const o = {}; ['id', 'store', 'supplier', 'sku', 'cat', 'name', 'url', 'img', 'price', 'si', 'w', 'd', 'h', 'tier', 'style', 'anyStyle', 'color', 'tw', 'tl', 'cover', 'perPiece', 'currency', 'ext', 'group', 'variant', 'model3d', 'model3dRot'].forEach(k => { if (it[k] !== undefined) o[k] = it[k]; });
       return o;
     });
   }

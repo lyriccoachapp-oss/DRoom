@@ -52,7 +52,7 @@ const Stores = (function () {
     w: ['width', 'w', 'productwidth', 'assembledwidth'], d: ['depth', 'd', 'productdepth', 'assembleddepth', 'length', 'productlength'], h: ['height', 'h', 'productheight', 'assembledheight'],
     tw: ['tilewidth', 'plankwidth', 'piecewidth'], tl: ['tilelength', 'planklength', 'piecelength'],
     dims: ['dimensions', 'size', 'productdimensions'], unit: ['unit', 'dimunit', 'dimensionunit', 'units', 'sizeunit'],
-    url: ['url', 'link', 'producturl', 'productlink', 'buyurl', 'deeplink'], image: ['image', 'imageurl', 'imagelink', 'thumbnail'],
+    url: ['url', 'link', 'producturl', 'productlink', 'buyurl', 'deeplink'], image: ['image', 'imageurl', 'imagelink', 'thumbnail'], model3d: ['model3d', 'glb', 'modelglb3d', 'droommodel'],
     shape: ['shape'], deep: ['deepside', 'chaisedepth', 'deepsidedepth'],
     color: ['color', 'colour', 'finish'], style: ['style'], priceUnit: ['priceunit', 'soldby', 'unitofmeasure', 'uom'],
     coverage: ['coverage', 'coveragesqft', 'sqftperbox', 'sqftpercase', 'coverageperbox'], perSqft: ['pricepersqft', 'pricesqft', 'persqft']
@@ -113,6 +113,8 @@ const Stores = (function () {
     return best;
   }
   const safeUrl = u => /^https?:\/\/[^\s"'<>]+$/i.test(String(u || '')) ? String(u) : null;
+  /* A product 3D model: a web address or a .glb file published beside the app (models/sofa.glb). */
+  const safeModel = u => { u = String(u || ''); return /^https:\/\/[^\s"'<>]+\.glb(\?[^\s"'<>]*)?$/i.test(u) || /^[a-z0-9_\-\/]+\.glb$/i.test(u) && !u.includes('..') ? u : null; };
 
   /* One feed row to a catalog item, or {skip: reason}. */
   function toItem(row, store) {
@@ -124,6 +126,7 @@ const Stores = (function () {
     if (cat === 'cabrun' || cat === 'uppers') return { skip: 'cabinet runs are not imported yet' };
     const C = CATS[cat], sku = String(get('sku') || name).slice(0, 60);
     const it = { id: 's:' + store.id + ':' + sku, store: store.id, supplier: store.name, sku, cat, name, url: safeUrl(get('url')), img: safeUrl(get('image')) };
+    const m3 = safeModel(get('model3d')); if (m3) { it.model3d = m3; const rot = num(row.model3d_rot); if (isFinite(rot)) it.model3dRot = rot * Math.PI / 180; }
     /* Prices are shown as they are quoted; a store in another currency says so next to each price. */
     if (store.currency) it.currency = store.currency;
     if (C.area) {
@@ -218,7 +221,7 @@ const Stores = (function () {
       const s = JSON.parse(storage.getItem(KEY)); if (!s) return;
       for (const id in s.stores || {}) { const o = s.stores[id]; if (BUILTIN[id]) { stores[id].enabled = o.enabled !== false; if (o.updated) stores[id].updated = String(o.updated).slice(0, 10); } else if (o && o.name) stores[id] = { id, name: String(o.name).slice(0, 40), enabled: o.enabled !== false, dimUnit: o.dimUnit === 'cm' ? 'cm' : 'in', custom: true, updated: o.updated }; }
       products = (s.products || []).filter(p => p && stores[p.store] && CATS[p.cat] && p.price > 0 && CATS[p.cat].sizes[p.si] && STYLES[p.style] && p.tier >= 0 && p.tier < 3)
-        .map(p => Object.assign(p, { url: safeUrl(p.url), img: safeUrl(p.img), supplier: stores[p.store].name }, paletteOf(p.cat, p.style, p.tier, p.color)));
+        .map(p => Object.assign(p, { url: safeUrl(p.url), img: safeUrl(p.img), model3d: safeModel(p.model3d) || undefined, supplier: stores[p.store].name }, paletteOf(p.cat, p.style, p.tier, p.color)));
     } catch (e) {}
     sync();
   }
@@ -243,7 +246,7 @@ const Stores = (function () {
       if (!p || typeof p.id !== 'string' || !p.store || !CATS[p.cat] || !(p.price > 0) || !CATS[p.cat].sizes[p.si] || !STYLES[p.style] || !(p.tier >= 0 && p.tier < 3)) return;
       if (products.some(q => q.id === p.id)) return;
       if (!stores[p.store]) stores[p.store] = { id: String(p.store).slice(0, 24), name: String(p.supplier || p.store).slice(0, 40), enabled: true, dimUnit: 'in', custom: true };
-      products.push(Object.assign({}, p, { url: safeUrl(p.url), img: safeUrl(p.img), supplier: stores[p.store].name }, paletteOf(p.cat, p.style, p.tier, p.color))); n++;
+      products.push(Object.assign({}, p, { url: safeUrl(p.url), img: safeUrl(p.img), model3d: safeModel(p.model3d) || undefined, supplier: stores[p.store].name }, paletteOf(p.cat, p.style, p.tier, p.color))); n++;
     });
     sync(); return n;
   }
