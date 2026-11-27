@@ -157,13 +157,13 @@ test('the estimate rows carry quantities, boxes and links, and PDF text stays in
 test('a feed row may carry a product 3D model: an https .glb or a .glb published beside the app', () => {
   run('Stores.reset()');
   const rows = [
-    { sku: 'M1', name: 'Model sofa - grey', droom_category: 'sofa', price: 999, width_cm: 241, depth_cm: 98, model3d: 'models/vimle.glb', model3d_rot: 90 },
+    { sku: 'M1', name: 'Model sofa - grey', droom_category: 'sofa', price: 999, width_cm: 241, depth_cm: 98, model3d: 'models/vimle.gltf.json', model3d_rot: 90 },
     { sku: 'M2', name: 'Remote sofa - grey', droom_category: 'sofa', price: 999, width_cm: 241, depth_cm: 98, glb: 'https://example.com/a/sofa.glb' },
     { sku: 'M3', name: 'Bad path sofa', droom_category: 'sofa', price: 999, width_cm: 241, depth_cm: 98, model3d: '../secret.glb' },
     { sku: 'M4', name: 'Plain http sofa', droom_category: 'sofa', price: 999, width_cm: 241, depth_cm: 98, model3d: 'http://example.com/a.glb' }];
   assert.strictEqual(call('Stores.importFeed("ikea", __a)', JSON.stringify({ products: rows })).added, 4);
   const m = id => run('BYID["s:ikea:' + id + '"].model3d') || null;
-  assert.deepStrictEqual([m('M1'), m('M2'), m('M3'), m('M4')], ['models/vimle.glb', 'https://example.com/a/sofa.glb', null, null]);
+  assert.deepStrictEqual([m('M1'), m('M2'), m('M3'), m('M4')], ['models/vimle.gltf.json', 'https://example.com/a/sofa.glb', null, null]);
   assert.ok(Math.abs(run('BYID["s:ikea:M1"].model3dRot') - Math.PI / 2) < 1e-9);
   run('Stores.reset()');
 });

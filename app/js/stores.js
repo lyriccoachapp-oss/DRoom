@@ -113,8 +113,9 @@ const Stores = (function () {
     return best;
   }
   const safeUrl = u => /^https?:\/\/[^\s"'<>]+$/i.test(String(u || '')) ? String(u) : null;
-  /* A product 3D model: a web address or a .glb file published beside the app (models/sofa.glb). */
-  const safeModel = u => { u = String(u || ''); return /^https:\/\/[^\s"'<>]+\.glb(\?[^\s"'<>]*)?$/i.test(u) || /^[a-z0-9_\-\/]+\.glb$/i.test(u) && !u.includes('..') ? u : null; };
+  /* A product 3D model: a web address or a file published beside the app (models/sofa.glb, models/sofa.gltf.json). */
+  /* Some hosts serve only listed file types, so a model may also be glTF JSON with its data embedded (name.gltf.json). */
+  const safeModel = u => { u = String(u || ''); return /^https:\/\/[^\s"'<>]+\.(glb|gltf)(\.json)?(\?[^\s"'<>]*)?$/i.test(u) || /^[a-z0-9_\-\/.]+\.(glb|gltf)(\.json)?$/i.test(u) && !u.includes('..') ? u : null; };
 
   /* One feed row to a catalog item, or {skip: reason}. */
   function toItem(row, store) {
